@@ -1,3 +1,7 @@
+//Pointless warnings
+#pragma warning(disable : 4505) //unreferenced local function has been removed
+#pragma warning(disable : 4201) //nonstandard extension used: nameless struct/union
+
 #include "resource.h"
 #include "targetver.h"
 #define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
@@ -10,6 +14,7 @@
 #include "unCap_button.h"
 #include "unCap_Reflection.h"
 #include "unCap_Serialization.h"
+#include "unCap_edit_oneline.h"
 #include "unCap_uncapcl.h"
 #include "SimpleVeil_veil.h"
 #include <vector>
@@ -18,6 +23,7 @@
 #pragma comment(lib, "comctl32.lib" ) //common controls lib
 #pragma comment(lib,"shlwapi.lib") //strcmpI strcpyN
 #pragma comment(lib,"UxTheme.lib") // setwindowtheme
+#pragma comment(lib,"Imm32.lib") // IME related stuff
 
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
@@ -151,6 +157,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     init_wndclass_unCap_button(hInstance);
 
     init_wndclass_SimpleVeil_veil(hInstance,unCap_colors.Veil);
+
+    init_wndclass_unCap_edit_oneline(hInstance);
 
     // Create Veil window
     HWND veil_wnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,

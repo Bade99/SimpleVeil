@@ -69,6 +69,15 @@
     <ClInclude Include="TRAY_HANDLER.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="windows_msg_mapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="unCap_edit_oneline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SimpleVeil_hotkey.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SimpleVeil.cpp">

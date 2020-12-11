@@ -88,7 +88,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
@@ -101,7 +101,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
@@ -118,7 +118,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
@@ -131,7 +131,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
+      <WarningLevel>Level4</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
@@ -150,8 +150,10 @@
     <ClInclude Include="fmt.h" />
     <ClInclude Include="LANGUAGE_MANAGER.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="SimpleVeil_hotkey.h" />
     <ClInclude Include="SimpleVeil_veil.h" />
     <ClInclude Include="TRAY_HANDLER.h" />
+    <ClInclude Include="unCap_edit_oneline.h" />
     <ClInclude Include="unCap_Helpers.h" />
     <ClInclude Include="unCap_math.h" />
     <ClInclude Include="unCap_Platform.h" />
@@ -164,6 +166,7 @@
     <ClInclude Include="unCap_uncapcl.h" />
     <ClInclude Include="unCap_uncapnc.h" />
     <ClInclude Include="unCap_Vector.h" />
+    <ClInclude Include="windows_msg_mapper.h" />
     <ClInclude Include="windows_undoc.h" />
   </ItemGroup>
   <ItemGroup>

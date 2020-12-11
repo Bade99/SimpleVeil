@@ -7,6 +7,7 @@
 #include "fmt.h"
 #include "resource.h"
 #include "unCap_uncapnc.h"
+#include "SimpleVeil_hotkey.h"
 #include <filesystem>
 #include <fstream>
 #include <propvarutil.h>
@@ -64,8 +65,9 @@ struct unCapClProcState {
 		struct {
 			HWND button_on_off;
 			HWND slider_brightness;
+			HWND edit_hotkey;
 		};
-		HWND all[2];//REMEMBER TO UPDATE
+		HWND all[3];//REMEMBER TO UPDATE
 	}controls;
 	unCapClSettings* settings;
 
@@ -97,9 +99,16 @@ void UNCAPCL_ResizeWindows(unCapClProcState* state) {
 	int slider_brightness_h = btn_onoff_h;
 	int slider_brightness_y = (h - slider_brightness_h) / 2;
 	int slider_brightness_w = max(btn_onoff_x - w_pad * 2, 0);
+
+	int hotkey_w = w / 2;
+	int hotkey_x = (w - hotkey_w) / 2;
+	int hotkey_h = btn_onoff_h;
+	int hotkey_y = h - hotkey_h - h_pad;
+
 	//TODO(fran): resizer that takes into account multiple hwnds
 	MoveWindow(state->controls.slider_brightness, slider_brightness_x, slider_brightness_y, slider_brightness_w, slider_brightness_h, FALSE);
 	MoveWindow(state->controls.button_on_off, btn_onoff_x, btn_onoff_y, btn_onoff_w, btn_onoff_h, FALSE);
+	MoveWindow(state->controls.edit_hotkey, hotkey_x, hotkey_y, hotkey_w, hotkey_h, FALSE);
 }
 
 void SetText_file_app(HWND wnd, const TCHAR* new_filename, const TCHAR* new_appname) {
@@ -131,6 +140,13 @@ void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
 	int slider_brightness_y= (h - slider_brightness_h) / 2;
 	int slider_brightness_w= max(btn_onoff_x - w_pad*2,0);
 
+	int hotkey_w = w/2;
+	int hotkey_x = (w- hotkey_w)/2;
+	int hotkey_h = btn_onoff_h;
+	int hotkey_y = h - hotkey_h- h_pad;
+
+	//NOTE: I could set all positions and sizes to 0 and force a resize, that way I dont have to write them twice
+
 
 	state->controls.slider_brightness = CreateWindowExW(0, TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_NOTICKS
 		, slider_brightness_x, slider_brightness_y, slider_brightness_w, slider_brightness_h, state->wnd, (HMENU)SLIDER_BRIGHTNESS, NULL, NULL);
@@ -144,6 +160,11 @@ void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
 		, btn_onoff_x, btn_onoff_y, btn_onoff_w, btn_onoff_h, state->wnd, (HMENU)BUTTON_ONOFF, NULL, NULL);
 	//AWT(state->controls.button_removecomment, LANG_CONTROL_REMOVE);
 	UNCAPBTN_set_brushes(state->controls.button_on_off, TRUE, unCap_colors.Img, unCap_colors.ControlBk, unCap_colors.ControlTxt, unCap_colors.ControlBkPush, unCap_colors.ControlBkMouseOver);
+
+	state->controls.edit_hotkey = CreateWindowW(unCap_wndclass_edit_oneline, L"", WS_VISIBLE | WS_CHILD | ES_CENTER
+		, hotkey_x, hotkey_y, hotkey_w, hotkey_h , state->wnd, NULL, NULL, NULL);
+	EDITONELINE_set_brushes(state->controls.edit_hotkey, TRUE, unCap_colors.ControlTxt, unCap_colors.ControlBk, unCap_colors.Img, unCap_colors.ControlTxt_Disabled, unCap_colors.ControlBk_Disabled, unCap_colors.Img_Disabled);
+	SetWindowSubclass(state->controls.edit_hotkey, HotkeyProc, 0, (DWORD_PTR)calloc(1, sizeof(HotkeyProcState)));
 
 	for (auto ctl : state->controls.all)
 		SendMessage(ctl, WM_SETFONT, (WPARAM)unCap_fonts.General, TRUE);
