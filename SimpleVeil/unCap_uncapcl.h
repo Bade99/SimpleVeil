@@ -15,15 +15,8 @@
 
 #define BUTTON_ONOFF 14
 #define SLIDER_BRIGHTNESS 15
-#define SAVE_FILE 15
-#define BACKUP_FILE 16
-#define SUBS_WND 17
-#define TABCONTROL 18
-#define TIMEDMESSAGES 19
-#define INITIALFINALCHAR 20
-#define SEPARATOR1 21
-#define SEPARATOR2 22
-#define TRAY 55
+#define TRAY 16
+#define EDIT_HOTKEY 17
 
 //TODO(fran): check that the veil remains on top, maybe update from time to time, or find some trigger when someone else goes on top
 
@@ -38,6 +31,7 @@ struct unCapClSettings {
 #define foreach_unCapClSettings_member(op) \
 		op(RECT, rc,200,200,700,600 ) \
 		op(int, slider_brightness_pos,10 ) \
+		op(hotkey_nfo, hotkey,0,0,0 ) \
 
 		HWND veil_wnd;
 		bool is_veil_on;
@@ -76,14 +70,6 @@ struct unCapClProcState {
 TCHAR unCap_wndclass_uncap_cl[] = TEXT("unCap_wndclass_uncap_cl"); //Client uncap
 
 void UNCAPCL_ResizeWindows(unCapClProcState* state) {
-	//RECT rect;
-	//GetClientRect(state->wnd, &rect);
-	////MoveWindow(hFile, 10, y_pad, RECTWIDTH(rect) - 36, 20, TRUE);
-	//MoveWindow(state->controls.static_notify, 256 + 70 + 10, y_pad + 44, RECTWIDTH(rect) - (256 + 70 + 4) - 36, 30, TRUE);
-	////@No se si actualizar las demas
-	//int txtcont_top = y_pad + 104;
-	//MoveWindow(state->controls.tab, 10, txtcont_top, RECTWIDTH(rect) - 20, RECTHEIGHT(rect) - txtcont_top - 10, TRUE);
-
 	RECT r; GetClientRect(state->wnd, &r);
 	int w = RECTWIDTH(r);
 	int h = RECTHEIGHT(r);
@@ -124,32 +110,9 @@ void SetText_file_app(HWND wnd, const TCHAR* new_filename, const TCHAR* new_appn
 }
 
 void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
-	RECT r; GetClientRect(state->wnd, &r);
-	int w = RECTWIDTH(r);
-	int h= RECTHEIGHT(r);
-	int w_pad = (int)((float)w * .05f);
-	int h_pad = (int)((float)h * .05f);
-
-	int btn_onoff_w = 70;
-	int btn_onoff_h = 30;
-	int btn_onoff_x = w - w_pad - btn_onoff_w;
-	int btn_onoff_y = (h- btn_onoff_h)/2;
-
-	int slider_brightness_x= w_pad;
-	int slider_brightness_h= btn_onoff_h;
-	int slider_brightness_y= (h - slider_brightness_h) / 2;
-	int slider_brightness_w= max(btn_onoff_x - w_pad*2,0);
-
-	int hotkey_w = w/2;
-	int hotkey_x = (w- hotkey_w)/2;
-	int hotkey_h = btn_onoff_h;
-	int hotkey_y = h - hotkey_h- h_pad;
-
-	//NOTE: I could set all positions and sizes to 0 and force a resize, that way I dont have to write them twice
-
 
 	state->controls.slider_brightness = CreateWindowExW(0, TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_NOTICKS
-		, slider_brightness_x, slider_brightness_y, slider_brightness_w, slider_brightness_h, state->wnd, (HMENU)SLIDER_BRIGHTNESS, NULL, NULL);
+		, 0, 0, 0, 0, state->wnd, (HMENU)SLIDER_BRIGHTNESS, NULL, NULL);
 
 	SendMessage(state->controls.slider_brightness, TBM_SETRANGE, TRUE, (LPARAM)MAKELONG(0, brightness_slider_max));
 	SendMessage(state->controls.slider_brightness, TBM_SETPAGESIZE, 0, (LPARAM)5);
@@ -157,17 +120,22 @@ void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
 	SendMessage(state->controls.slider_brightness, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)state->settings->slider_brightness_pos);
 
 	state->controls.button_on_off = CreateWindowW(unCap_wndclass_button, NULL, WS_VISIBLE | WS_CHILD | WS_TABSTOP
-		, btn_onoff_x, btn_onoff_y, btn_onoff_w, btn_onoff_h, state->wnd, (HMENU)BUTTON_ONOFF, NULL, NULL);
+		, 0, 0, 0, 0, state->wnd, (HMENU)BUTTON_ONOFF, NULL, NULL);
 	//AWT(state->controls.button_removecomment, LANG_CONTROL_REMOVE);
 	UNCAPBTN_set_brushes(state->controls.button_on_off, TRUE, unCap_colors.Img, unCap_colors.ControlBk, unCap_colors.ControlTxt, unCap_colors.ControlBkPush, unCap_colors.ControlBkMouseOver);
 
 	state->controls.edit_hotkey = CreateWindowW(unCap_wndclass_edit_oneline, L"", WS_VISIBLE | WS_CHILD | ES_CENTER
-		, hotkey_x, hotkey_y, hotkey_w, hotkey_h , state->wnd, NULL, NULL, NULL);
+		, 0,0,0,0, state->wnd, (HMENU)EDIT_HOTKEY, NULL, NULL);
 	EDITONELINE_set_brushes(state->controls.edit_hotkey, TRUE, unCap_colors.ControlTxt, unCap_colors.ControlBk, unCap_colors.Img, unCap_colors.ControlTxt_Disabled, unCap_colors.ControlBk_Disabled, unCap_colors.Img_Disabled);
-	SetWindowSubclass(state->controls.edit_hotkey, HotkeyProc, 0, (DWORD_PTR)calloc(1, sizeof(HotkeyProcState)));
-
+	HotkeyProcState* hotkeyprocstate = (HotkeyProcState*)calloc(1, sizeof(HotkeyProcState));
+	SetWindowSubclass(state->controls.edit_hotkey, HotkeyProc, 0, (DWORD_PTR)hotkeyprocstate);
+	HOTKEY_set_brushes(hotkeyprocstate, unCap_colors.ControlTxt, unCap_colors.ControlTxt_Disabled, unCap_colors.HotkeyTxt_Accepted, unCap_colors.HotkeyTxt_Rejected);
+	hotkeyprocstate->stored_hk = &state->settings->hotkey;
+	
 	for (auto ctl : state->controls.all)
 		SendMessage(ctl, WM_SETFONT, (WPARAM)unCap_fonts.General, TRUE);
+
+	UNCAPCL_ResizeWindows(state);
 }
 
 void UNCAPCL_save_settings(unCapClProcState* state) {
@@ -202,6 +170,13 @@ void SIMPLEVEIL_update_btn_onoff_text(unCapClProcState* state) {
 	else {
 		SetWindowText(state->controls.button_on_off, RCS(LANG_BTN_TURN_ON));
 	}
+}
+
+void SIMPLEVEIL_restore_wnd(unCapClProcState* state) {
+	if (!IsWindowVisible(state->nc_parent))
+		RestoreWndFromTray(state->nc_parent);
+	else
+		ShowWindow(state->nc_parent, SW_SHOW);
 }
 
 LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -281,11 +256,7 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		}
 		case WM_RBUTTONDOWN:
 		{
-			if (!IsWindowVisible(state->nc_parent)) {
-				RestoreWndFromTray(state->nc_parent);
-			}
-			else
-				ShowWindow(state->nc_parent, SW_SHOW);
+			SIMPLEVEIL_restore_wnd(state);
 
 			break;
 		}
@@ -352,6 +323,11 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		// Msgs from my controls
 		switch (LOWORD(wparam))
 		{
+		case EDIT_HOTKEY:
+		{
+			SIMPLEVEIL_restore_wnd(state);
+			return 0;
+		} break;
 		case BUTTON_ONOFF:
 		{
 			state->settings->is_veil_on = !state->settings->is_veil_on;

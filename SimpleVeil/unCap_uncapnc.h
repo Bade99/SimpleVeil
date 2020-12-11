@@ -1289,6 +1289,10 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
+	case WM_SYSKEYUP://No need for that
+	{
+		return DefWindowProc(hwnd, msg, wparam, lparam);
+	} break;
 	default:
 		if (msg >= 0xC000 && msg <= 0xFFFF) {//String messages for use by applications  
 			//IMPORTANT: a way to find out the name of 0xC000 through 0xFFFF messages

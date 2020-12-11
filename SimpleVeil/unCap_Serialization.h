@@ -175,11 +175,26 @@ namespace userial {
 		return res;
 	}
 
+	static str serialize(u16 var) {//Basic types are done by hand since they are the building blocks
+		str res = to_str(var);
+		return res;
+	}
+
+	static str serialize(u8 var) {//Basic types are done by hand since they are the building blocks
+		str res = to_str(var);
+		return res;
+	}
+
 	static str serialize(i32 var) {//Basic types are done by hand since they are the building blocks
 		str res = to_str(var);
 		return res;
 	}
 	static str serialize(f32 var) {
+		str res = to_str(var);
+		return res;
+	}
+
+	static str serialize(LPARAM var) {//Basic types are done by hand since they are the building blocks
 		str res = to_str(var);
 		return res;
 	}
@@ -216,6 +231,61 @@ namespace userial {
 			str substr = content.substr(s, 5/*false is 5 chars*/);
 			if (!substr.compare(_t("true"))) { var = true; return true; }
 			else if (!substr.compare(_t("false"))) { var = false; return true; }
+		}
+		return false;
+	}
+
+	static bool deserialize(u16& var, str name, const str& content) {//We use references in deserialization to simplify the macros
+		str start = name + _keyvaluesepartor;
+		str numeric_i = str(TEXT("1234567890."));
+		size_t s = find_identifier(content, 0, start);
+		size_t e = find_till_no_match(content, s + start.size(), numeric_i);
+		if (str_found(s) && str_found(e)) {
+			s += start.size();
+			str substr = content.substr(s, e - s);
+			try {
+				u16 temp = (u16)std::stoul(substr);
+				var = temp;
+				return true;
+			}
+			catch (...) {}
+		}
+		return false;
+	}
+
+	static bool deserialize(u8& var, str name, const str& content) {//We use references in deserialization to simplify the macros
+		str start = name + _keyvaluesepartor;
+		str numeric_i = str(TEXT("1234567890."));
+		size_t s = find_identifier(content, 0, start);
+		size_t e = find_till_no_match(content, s + start.size(), numeric_i);
+		if (str_found(s) && str_found(e)) {
+			s += start.size();
+			str substr = content.substr(s, e - s);
+			try {
+				u8 temp = (u8)std::stoul(substr);
+				var = temp;
+				return true;
+			}
+			catch (...) {}
+		}
+		return false;
+	}
+
+	//TODO(fran): LPARAM should simply be binary encoded, maybe hex
+	static bool deserialize(LPARAM& var, str name, const str& content) {//We use references in deserialization to simplify the macros
+		str start = name + _keyvaluesepartor;
+		str numeric_i = str(TEXT("1234567890."));
+		size_t s = find_identifier(content, 0, start);
+		size_t e = find_till_no_match(content, s + start.size(), numeric_i);
+		if (str_found(s) && str_found(e)) {
+			s += start.size();
+			str substr = content.substr(s, e - s);
+			try {
+				LPARAM temp = (LPARAM)std::stoll(substr);
+				var = temp;
+				return true;
+			}
+			catch (...) {}
 		}
 		return false;
 	}

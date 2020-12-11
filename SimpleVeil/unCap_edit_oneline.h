@@ -781,7 +781,10 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 			if (char_sz <= (size_t)state->char_max_sz) {
 				state->char_text = buf;
 
-				for (size_t i = 0; i < char_sz; i++) state->char_dims.insert(state->char_dims.begin() + state->char_cur_sel.x + i, EDITONELINE_calc_char_dim(state, buf[i]).cx);
+				state->char_dims.clear();//Reset dims since we now have new text
+				state->char_cur_sel = { 0,0 };//Reset cursor
+				
+				for (size_t i = 0; i < char_sz; i++) state->char_dims.insert(state->char_dims.begin() + state->char_cur_sel.x + i, EDITONELINE_calc_char_dim(state, buf[i]).cx);//TODO(fran): I think im doing something stupid here, I take into account char_cur_sel when it should always be 0, it looks like I tried to make this work for copy paste, which is handled differently
 				state->char_cur_sel.x = (int)char_sz;
 
 				LONG_PTR  style = GetWindowLongPtr(state->wnd, GWL_STYLE);
@@ -870,6 +873,10 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 	//	return DefWindowProc(hwnd, msg, wparam, lparam);
 	//}break;
 	case WM_WINDOWPOSCHANGING://TODO(fran): do I handle resizing?
+	{
+		return DefWindowProc(hwnd, msg, wparam, lparam);
+	} break;
+	case WM_WINDOWPOSCHANGED://TODO(fran): do I handle resizing?
 	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;

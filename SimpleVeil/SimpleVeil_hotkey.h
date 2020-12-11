@@ -4,20 +4,58 @@
 #include "unCap_Helpers.h"
 #include "unCap_Reflection.h"
 
-//USE WITH: any type of edit control, but preferably unCap_wndclass_edit_oneline
+//USE WITH: unCap_wndclass_edit_oneline (this is needed to change text colors, otherwise it'd work with any edit control)
 //USAGE: SetWindowSubclass(your hwnd, HotkeyProc, 0, (DWORD_PTR)calloc(1,sizeof(HotkeyProcState))); //NOTE: HotkeyProc will take care of releasing that memory
+//NOTIFICATION: when the hotkey is triggered a msg will be sent to the parent wnd through WM_COMMAND, LOWORD(wparam)= msg number specified in hMenu param of CreateWindow/Ex, lparam=HWND of the control
 
 //TODO(fran): make sure we dont accept IME
+//TODO(fran): maybe it's just better to take the stuff from edit_oneline and put it with the hotkey control, mainly because of our need to be switching brushes, the other way would be that we store the normal text, hotkey accepted and hotkey rejected brushes and the edit control below has no text brush at all, only for disabled
+
+struct hotkey_nfo {
+#define foreach_hotkey_nfo_member(op) \
+	op(u16, hk_mod,0) \
+	op(u8, hk_vk,0) \
+	op(LPARAM, hk_trasn_nfo,0) \
+
+	//hk_trasn_nfo: this is given to you in WM_KEYDOWN and similar msgs
+
+	foreach_hotkey_nfo_member(_generate_member);
+
+	_generate_default_struct_serialize(foreach_hotkey_nfo_member);
+
+	_generate_default_struct_deserialize(foreach_hotkey_nfo_member);
+};
+
+_add_struct_to_serialization_namespace(hotkey_nfo)
 
 struct HotkeyProcState {
 	bool not_first_time;
 	HWND wnd;
-	struct {//hotkey
-		u16 hk_mod;
-		u8 hk_vk;
-	};
-	cstr default_text[100];
+	HWND parent;
+	UINT msg_to_send;
+	struct { //brushes
+		HBRUSH txt_hotkey_accepted;
+		HBRUSH txt_hotkey_rejected;
+		HBRUSH txt;
+		HBRUSH default_text;
+	} brushes;
+	hotkey_nfo hk;
+	hotkey_nfo* stored_hk;//On startup represents represents what was saved on serialization, after that it represents the currently valid/working hotkey
+	cstr default_text[100];//TODO(fran): add msg to be able to change this
 };
+
+//NOTE: the caller takes care of deleting the brushes, we dont do it
+void HOTKEY_set_brushes(HotkeyProcState* state, HBRUSH txt, HBRUSH default_text, HBRUSH txt_hotkey_accepted, HBRUSH txt_hotkey_rejected) {
+	if (txt)state->brushes.txt = txt;
+	if (txt)state->brushes.default_text = default_text;
+	if (txt)state->brushes.txt_hotkey_accepted = txt_hotkey_accepted;
+	if (txt)state->brushes.txt_hotkey_rejected = txt_hotkey_rejected;
+	//TODO(fran): this is horrible, I cant ask for repaint, I really need to make the hotkey control its own instead of a subclass
+}
+
+void HOTKEY_set_txt_brush(HotkeyProcState* state, HBRUSH txt_br) {//Internal function
+	EDITONELINE_set_brushes(state->wnd, TRUE, txt_br,0,0,0,0,0);
+}
 
 str HOTKEY_hk_to_str(u16 hk_mod, LPARAM lparam/*This is the one given to you by WM_KEYDOWN and the like*/) {
 	str hotkey_str=_t("");
@@ -48,15 +86,50 @@ str HOTKEY_hk_to_str(u16 hk_mod, LPARAM lparam/*This is the one given to you by 
 }
 
 LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UINT_PTR /*uIdSubclass*/, DWORD_PTR dwRefData) {
+#define HOTKEY_TIMER 0xf1
+	constexpr int timer_ms = 3000;
+	
 	HotkeyProcState* state = (HotkeyProcState*)dwRefData;
 	Assert(state);
 	if (!state->not_first_time) {
 		state->not_first_time = !state->not_first_time;
 		state->wnd = wnd;
+
+		LONG_PTR  style = GetWindowLongPtr(state->wnd, GWL_STYLE);
+		Assert(style & WS_CHILD);
+
+		state->parent = GetParent(state->wnd);
+		state->msg_to_send = (UINT)(UINT_PTR)GetMenu(state->wnd);
 		cstr default_text[] = _t("Choose a hotkey");
 		memcpy(state->default_text, default_text, sizeof(default_text));//TODO(fran): check this is correct
-		SetWindowText(wnd, state->default_text);
-		//TODO(fran): flip text and text_disabled brush
+		if (state->stored_hk && state->stored_hk->hk_trasn_nfo && (state->stored_hk->hk_mod || state->stored_hk->hk_vk)) {//We saved a hotkey in a previous execution
+			state->hk = *state->stored_hk;
+
+			//TODO(fran): make this into a function, it's the same code from wm_keydown
+			if (state->hk.hk_mod != MOD_NOREPEAT) {//We have valid modifiers
+				BOOL res = RegisterHotKey(state->wnd, 0, state->hk.hk_mod, state->hk.hk_vk);
+				if (res) {
+					*state->stored_hk = state->hk;
+					HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_accepted);
+				}
+				else {
+					*state->stored_hk = hotkey_nfo{ 0 };
+					HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_rejected);
+				}
+			}
+			else {
+				*state->stored_hk = hotkey_nfo{ 0 };
+				HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_rejected);
+			}
+			SetTimer(state->wnd, HOTKEY_TIMER, timer_ms, NULL);
+			str hk_str = HOTKEY_hk_to_str(state->hk.hk_mod, state->hk.hk_trasn_nfo);
+			SetWindowText(state->wnd, hk_str.c_str());
+
+		}
+		else {
+			SetWindowText(wnd, state->default_text);
+			HOTKEY_set_txt_brush(state, state->brushes.default_text);
+		}
 	}
 	switch (msg) {
 	//TODO(fran): should I stop keyup msgs?
@@ -72,7 +145,10 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 		bool ctrl_is_down = HIBYTE(GetKeyState(VK_CONTROL));
 		bool alt_is_down = HIBYTE(GetKeyState(VK_MENU));
 		bool shift_is_down = HIBYTE(GetKeyState(VK_SHIFT));
-		//TODO(fran): ignore windows key, it's reserved for the system (VK_LWIN VK_RWIN), also I dont think we should accept just mod keys (VK_CONTROL VK_SHIFT VK_MENU)
+
+		UnregisterHotKey(state->wnd, 0);//No matter what, if we got here we are gonna modify the hotkey, so we remove the previous one
+
+		//NOTE: we ignore windows key, it's reserved for the system (VK_LWIN VK_RWIN), also mod keys by themselves(VK_CONTROL VK_SHIFT VK_MENU) and F12 which is reserved for use by debuggers
 		switch (vk) {
 		case VK_LWIN:
 		case VK_RWIN:
@@ -83,27 +159,38 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 		case VK_LSHIFT:
 		case VK_RSHIFT:
 		case VK_MENU:
+		case VK_F12:
 		{
-			str hk_str = HOTKEY_hk_to_str(ctrl_is_down ? MOD_CONTROL : 0 | alt_is_down ? MOD_ALT : 0 | shift_is_down ? MOD_SHIFT : 0, 0);
+			str hk_str = HOTKEY_hk_to_str((ctrl_is_down ? MOD_CONTROL : 0) | (alt_is_down ? MOD_ALT : 0) | (shift_is_down ? MOD_SHIFT : 0), vk==VK_F12?lparam : 0);
 			SetWindowText(state->wnd, hk_str.c_str());
+			*state->stored_hk = hotkey_nfo{ 0 };
+			HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_rejected);
+			SetTimer(state->wnd, HOTKEY_TIMER, timer_ms, NULL);
 			return 0;
 		} break;
 		default://We have a valid vk
 		{
 			//We got a valid virtual key
-			state->hk_mod = ctrl_is_down ? MOD_CONTROL : 0 | alt_is_down ? MOD_ALT : 0 | shift_is_down ? MOD_SHIFT : 0 | MOD_NOREPEAT;
-			state->hk_vk = vk;
-			if (state->hk_mod != MOD_NOREPEAT) {//We have valid modifiers
-				UnregisterHotKey(state->wnd, 0);
-				BOOL res = RegisterHotKey(state->wnd, 0, state->hk_mod, state->hk_vk);
+			state->hk.hk_mod = (ctrl_is_down ? MOD_CONTROL : 0) | (alt_is_down ? MOD_ALT : 0) | (shift_is_down ? MOD_SHIFT : 0) | MOD_NOREPEAT;
+			state->hk.hk_vk = vk;
+			state->hk.hk_trasn_nfo = lparam;
+			if (state->hk.hk_mod != MOD_NOREPEAT) {//We have valid modifiers
+				BOOL res = RegisterHotKey(state->wnd, 0, state->hk.hk_mod, state->hk.hk_vk);
 				if (res) {
-					//TODO(fran): change text brush to green and store previous text brush
+					*state->stored_hk = state->hk;
+					HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_accepted);
 				}
 				else {
-					//TODO(fran): change text brush to red and store previous text brush
+					*state->stored_hk = hotkey_nfo{ 0 };
+					HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_rejected);
 				}
 			}
-			str hk_str = HOTKEY_hk_to_str(state->hk_mod, lparam);
+			else {
+				*state->stored_hk = hotkey_nfo{ 0 };
+				HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_rejected);
+			}
+			SetTimer(state->wnd, HOTKEY_TIMER, timer_ms, NULL);
+			str hk_str = HOTKEY_hk_to_str(state->hk.hk_mod, state->hk.hk_trasn_nfo);
 			SetWindowText(state->wnd, hk_str.c_str());
 			return 0;
 		} break;
@@ -118,8 +205,26 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 	{
 		return 0;
 	} break;
+	case WM_HOTKEY:
+	{
+		PostMessage(state->parent, WM_COMMAND, (WPARAM)MAKELONG(state->msg_to_send, 0), (LPARAM)state->wnd);//notify parent
+	} break;
+	case WM_TIMER:
+	{
+		WPARAM timerID = wparam;
+		switch (timerID) {
+		case HOTKEY_TIMER:
+		{
+			KillTimer(state->wnd, timerID);
+			HOTKEY_set_txt_brush(state, state->brushes.txt);
+			return 0;
+		} break;
+		default: return DefSubclassProc(wnd, msg, wparam, lparam);
+		}
+	} break;
 	case WM_DESTROY://TODO(fran): look for others, also what if subclassing is removed
 	{
+		UnregisterHotKey(state->wnd, 0);
 		free(state);
 	} break;
 	default: return DefSubclassProc(wnd, msg, wparam, lparam);
