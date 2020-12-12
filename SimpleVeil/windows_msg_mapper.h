@@ -2,7 +2,7 @@
 //Thanks to https://stackoverflow.com/questions/8824255/getting-a-windows-message-name/40425868
 //TODO(fran): change to a less (pointless) C++sy solution
 //TODO(fran): sometimes you struck gold http://blog.airesoft.co.uk/2009/11/wm_messages/ add everyone to the party
-#ifdef _DEBUG
+#ifdef _SHOWCONSOLE
 #include <map>
 
 static std::map<int, const char*> wmTranslation = {
@@ -1042,7 +1042,7 @@ const char* msgToString(unsigned int /*msg*/) {
 }
 #endif
 
-#ifdef _DEBUG
+#ifdef _SHOWCONSOLE
 #include <map>
 
 static std::map<int, const char*> htTranslation = {

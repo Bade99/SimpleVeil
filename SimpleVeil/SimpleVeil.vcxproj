@@ -138,6 +138,7 @@
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -151,6 +152,7 @@
     <ClInclude Include="LANGUAGE_MANAGER.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="SimpleVeil_hotkey.h" />
+    <ClInclude Include="SIMPLEVEIL_trackbar.h" />
     <ClInclude Include="SimpleVeil_veil.h" />
     <ClInclude Include="TRAY_HANDLER.h" />
     <ClInclude Include="unCap_edit_oneline.h" />

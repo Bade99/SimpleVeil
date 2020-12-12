@@ -12,6 +12,8 @@
 //TODO(fran): make sure we dont accept IME
 //TODO(fran): maybe it's just better to take the stuff from edit_oneline and put it with the hotkey control, mainly because of our need to be switching brushes, the other way would be that we store the normal text, hotkey accepted and hotkey rejected brushes and the edit control below has no text brush at all, only for disabled
 
+//Extra scancode nfo https://handmade.network/wiki/2823-keyboard_inputs_-_scancodes,_raw_input,_text_input,_key_names
+
 struct hotkey_nfo {
 #define foreach_hotkey_nfo_member(op) \
 	op(u16, hk_mod,0) \
@@ -96,7 +98,7 @@ str HOTKEY_hk_to_str(u16 hk_mod, LPARAM lparam/*This is the one given to you by 
 		const cstr* stringed_vk = vkToString(vk);
 		if (*stringed_vk) {
 			valid_vk = true;
-			int stringed_vk_len = cstr_len(stringed_vk)+1;
+			size_t stringed_vk_len = cstr_len(stringed_vk)+1;
 			memcpy_s(vk_str, sizeof(vk_str), stringed_vk, stringed_vk_len * sizeof(*stringed_vk));
 		}
 	}

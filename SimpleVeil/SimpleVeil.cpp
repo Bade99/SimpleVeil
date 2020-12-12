@@ -1,6 +1,17 @@
 ﻿//Pointless warnings
-#pragma warning(disable : 4505) //unreferenced local function has been removed
+#pragma warning(disable : 4065) //switch statement contains 'default' but no 'case' labels
+#pragma warning(disable : 4100) //unreferenced formal parameter (actually can be useful)
+#pragma warning(disable : 4189) //local variable is initialized but not referenced (actually can be useful)
 #pragma warning(disable : 4201) //nonstandard extension used: nameless struct/union
+#pragma warning(disable : 4458) //declaration of '...' hides class member (warning from windows' code)
+#pragma warning(disable : 4505) //unreferenced local function has been removed
+
+#ifdef _DEBUG
+//TODO(fran): change to logging
+#define _SHOWCONSOLE
+#else
+//#define _SHOWCONSOLE
+#endif
 
 #include "resource.h"
 #include "targetver.h"
@@ -19,9 +30,8 @@
 #include "SimpleVeil_veil.h"
 #include <vector>
 #include <algorithm>
-#include <io.h> //_setmode
-#include <fcntl.h> //_O_U16TEXT
-
+//#include <io.h> //_setmode
+//#include <fcntl.h> //_O_U16TEXT
 
 #pragma comment(lib, "comctl32.lib" ) //common controls lib
 #pragma comment(lib,"shlwapi.lib") //strcmpI strcpyN
@@ -29,6 +39,9 @@
 #pragma comment(lib,"Imm32.lib") // IME related stuff
 
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
+//TODO(fran): multimonitor support
+//TODO(fran): better calculation for default wnd size, also store last screen size cause if it changes next time we gotta revert back to default wnd size
 
 i32 n_tabs = 0;//Needed for serialization
 
@@ -76,13 +89,6 @@ str GetFontFaceName() {
 
     return TEXT("");
 }
-
-#ifdef _DEBUG
-//TODO(fran): change to logging
-#define _SHOWCONSOLE
-#else
-//#define _SHOWCONSOLE
-#endif
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
@@ -171,7 +177,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
         0, 0, 100, 100,
         nullptr, nullptr, hInstance, nullptr);
     Assert(veil_wnd);
-    ShowWindow(veil_wnd, SW_MAXIMIZE);
+    //ShowWindow(veil_wnd, SW_MAXIMIZE);
 
     uncap_cl.veil_wnd = veil_wnd;
 

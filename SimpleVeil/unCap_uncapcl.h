@@ -8,6 +8,7 @@
 #include "resource.h"
 #include "unCap_uncapnc.h"
 #include "SimpleVeil_hotkey.h"
+#include "SIMPLEVEIL_trackbar.h"
 #include <filesystem>
 #include <fstream>
 #include <propvarutil.h>
@@ -29,7 +30,7 @@ constexpr TCHAR appName[] = _t("SimpleVeil"); //Program name, to be displayed on
 struct unCapClSettings {
 
 #define foreach_unCapClSettings_member(op) \
-		op(RECT, rc,200,200,700,600 ) \
+		op(RECT, rc,200,200,700,482 ) \
 		op(int, slider_brightness_pos,10 ) \
 		op(hotkey_nfo, hotkey,0,0,0 ) \
 
@@ -111,13 +112,15 @@ void SetText_file_app(HWND wnd, const TCHAR* new_filename, const TCHAR* new_appn
 
 void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
 
-	state->controls.slider_brightness = CreateWindowExW(0, TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_NOTICKS
+	state->controls.slider_brightness = CreateWindowExW(0, TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_NOTICKS | TBS_HORZ
 		, 0, 0, 0, 0, state->wnd, (HMENU)SLIDER_BRIGHTNESS, NULL, NULL);
 
 	SendMessage(state->controls.slider_brightness, TBM_SETRANGE, TRUE, (LPARAM)MAKELONG(0, brightness_slider_max));
 	SendMessage(state->controls.slider_brightness, TBM_SETPAGESIZE, 0, (LPARAM)5);
 	SendMessage(state->controls.slider_brightness, TBM_SETLINESIZE, 0, (LPARAM)5);
 	SendMessage(state->controls.slider_brightness, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)state->settings->slider_brightness_pos);
+
+	SetWindowSubclass(state->controls.slider_brightness, TrackbarProc, 0, 0);
 
 	state->controls.button_on_off = CreateWindowW(unCap_wndclass_button, NULL, WS_VISIBLE | WS_CHILD | WS_TABSTOP
 		, 0, 0, 0, 0, state->wnd, (HMENU)BUTTON_ONOFF, NULL, NULL);
@@ -152,9 +155,35 @@ unCapClProcState* UNCAPCL_get_state(HWND uncapcl) {
 	return state;
 }
 
+RECT GetVirtualScreenRect() {
+	RECT rcCombined{ 0,0,0,0 };
+	EnumDisplayMonitors(NULL, NULL, 
+		[](HMONITOR, HDC, LPRECT lprcMonitor, LPARAM pData) ->BOOL {
+			RECT* rcCombined = (RECT*)pData;
+			UnionRect(rcCombined, rcCombined, lprcMonitor);
+			return TRUE;
+		}
+	, (LPARAM)&rcCombined);
+	return rcCombined;
+	//NOTE: other way could be with getsystemmetrics, though I know that has a bug (at least in win7)
+}
+
+void SIMPLEVEIL_resize_veil_cover_all_monitors(unCapClProcState* state) { //Simulates the window being maximized in all monitors
+	RECT virtual_screen = GetVirtualScreenRect();
+	SetWindowPos(state->settings->veil_wnd, NULL, virtual_screen.left, virtual_screen.top, virtual_screen.right, virtual_screen.bottom, SWP_NOACTIVATE | SWP_NOZORDER);
+	//WINDOWPLACEMENT wnd_place;
+	//wnd_place.
+	//SetWindowPlacement(wnd,)
+}
+
 void SIMPLEVEIL_update_veil_wnd(unCapClProcState* state) {
 	if (state->settings->is_veil_on) {
-		ShowWindow(state->settings->veil_wnd, SW_MAXIMIZE);
+#if 0
+		//ShowWindow(state->settings->veil_wnd, SW_MAXIMIZE);
+		ShowWindow(state->settings->veil_wnd, SW_SHOW);
+#else
+		ShowWindow(state->settings->veil_wnd, SW_SHOW);
+#endif
 		SetLayeredWindowAttributes(state->settings->veil_wnd, 0, (BYTE)(((float)state->settings->slider_brightness_pos / 100.f) * 255.f), LWA_ALPHA);
 		BringWindowToTop(state->nc_parent);
 	}
@@ -180,6 +209,7 @@ void SIMPLEVEIL_restore_wnd(unCapClProcState* state) {
 }
 
 LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+	printf(msgToString(msg)); printf("\n");
 	unCapClProcState* state = UNCAPCL_get_state(hwnd);
 	switch (msg) {
 	case WM_DRAWITEM:
@@ -238,6 +268,7 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 
 		state->settings->is_veil_on = true;
 
+		SIMPLEVEIL_resize_veil_cover_all_monitors(state);
 		SIMPLEVEIL_update_veil_wnd(state);
 		SIMPLEVEIL_update_btn_onoff_text(state);
 
@@ -353,6 +384,14 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		}
 		}
 		return DefWindowProc(hwnd, msg, wparam, lparam);
+	} break;
+	case WM_DISPLAYCHANGE://Sent by our nc parent (otherwise we would not be able to get this msg)
+	{//see https://docs.microsoft.com/en-us/windows/win32/gdi/hmonitor-and-the-device-context
+		//SIMPLEVEIL_update_veil_wnd(state);
+		SIMPLEVEIL_resize_veil_cover_all_monitors(state);
+		//PostMessage(state->wnd, WM_COMMAND, MAKELONG(BUTTON_ONOFF, 0), 0);//HACK: for some reason we cant simply SIMPLEVEIL_update_veil_wnd, I guess windows' code hasnt updated yet, so we need to offset the update in time, that why I do two PostMessage, so we go back to our original state but with the correct new size for the veil
+		//PostMessage(state->wnd, WM_COMMAND, MAKELONG(BUTTON_ONOFF, 0), 0);
+		return 0;
 	} break;
 	case WM_NCCALCSIZE:
 	{

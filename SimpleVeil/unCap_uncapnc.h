@@ -10,6 +10,7 @@
 #include "windows_undoc.h"
 #include "unCap_Serialization.h"
 #include "unCap_Reflection.h"
+#include "windows_msg_mapper.h"
 
 // ------------------------ USAGE NOTES ------------------------ //
 // - If you need menus to resize, for example when you change languages
@@ -1296,6 +1297,10 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	case WM_APPCOMMAND://This is triggered, for example, when the user presses one of the media keys (next track, prev, ...) in their keyboard
 	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
+	} break;
+	case WM_DISPLAYCHANGE:
+	{
+		return SendMessage(state->client, msg, wparam, lparam);
 	} break;
 	default:
 		if (msg >= 0xC000 && msg <= 0xFFFF) {//String messages for use by applications  
