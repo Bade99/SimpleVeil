@@ -9,6 +9,8 @@
 #include <Shlwapi.h>
 #include <vector>
 
+//BUG: cursor selection is wrong when displaying the default text for the hotkey subclass, you can select behind the text, as if it where using left alignment instead of center
+
 //NOTE: this took two days to fully implement, certainly a hard control but not as much as it's made to believe, obviously im just doing single line but extrapolating to multiline isnt much harder now a single line works "all right"
 
 constexpr TCHAR unCap_wndclass_edit_oneline[] = TEXT("unCap_wndclass_edit_oneline");
@@ -877,6 +879,10 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
 	case WM_WINDOWPOSCHANGED://TODO(fran): do I handle resizing?
+	{
+		return DefWindowProc(hwnd, msg, wparam, lparam);
+	} break;
+	case WM_APPCOMMAND://This is triggered, for example, when the user presses one of the media keys (next track, prev, ...) in their keyboard
 	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;

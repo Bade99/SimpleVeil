@@ -78,6 +78,9 @@
     <ClInclude Include="SimpleVeil_hotkey.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="windows_vk_mapper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SimpleVeil.cpp">

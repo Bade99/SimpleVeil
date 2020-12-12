@@ -3,6 +3,7 @@
 #include <CommCtrl.h>
 #include "unCap_Helpers.h"
 #include "unCap_Reflection.h"
+#include "windows_vk_mapper.h"
 
 //USE WITH: unCap_wndclass_edit_oneline (this is needed to change text colors, otherwise it'd work with any edit control)
 //USAGE: SetWindowSubclass(your hwnd, HotkeyProc, 0, (DWORD_PTR)calloc(1,sizeof(HotkeyProcState))); //NOTE: HotkeyProc will take care of releasing that memory
@@ -57,7 +58,7 @@ void HOTKEY_set_txt_brush(HotkeyProcState* state, HBRUSH txt_br) {//Internal fun
 	EDITONELINE_set_brushes(state->wnd, TRUE, txt_br,0,0,0,0,0);
 }
 
-str HOTKEY_hk_to_str(u16 hk_mod, LPARAM lparam/*This is the one given to you by WM_KEYDOWN and the like*/) {
+str HOTKEY_hk_to_str(u16 hk_mod, LPARAM lparam/*This is the one given to you by WM_KEYDOWN and the like*/, u8 vk/*if the string for the virtual key code cant be retrieved from lparam we attempt to get it from vk*/) {
 	str hotkey_str=_t("");
 	bool first_mod = true;
 	if (hk_mod & MOD_CONTROL) {
@@ -75,10 +76,32 @@ str HOTKEY_hk_to_str(u16 hk_mod, LPARAM lparam/*This is the one given to you by 
 		hotkey_str += L"Shift";
 		first_mod = false;
 	}
-	TCHAR vk_str[20];
-	int res = GetKeyNameText((LONG)lparam, vk_str, ARRAYSIZE(vk_str));//TODO(fran): modify bit 25 to make sure we never care about left or right keys
-	if (res) {
-		if(res > 1) cstr_lwr(vk_str + 1, cstr_len(vk_str)); //TODO(fran): better lowercase functions, and work with locales
+	bool valid_vk = false;
+	TCHAR vk_str[30];
+	int keynameres = GetKeyNameText((LONG)lparam, vk_str, ARRAYSIZE(vk_str));//TODO(fran): modify bit 25 to make sure we never care about left or right keys
+
+	//if (!res) {
+	//	//TODO(fran): MapVirtualKeyEx has some extra crazy stuff that could be useful
+	//	UINT scancode = MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC_EX,GetKeyboardLayout(0));
+	//	if (scancode) {
+	//		res = GetKeyNameText(scancode<<16, vk_str, ARRAYSIZE(vk_str));
+	//	}
+	//}
+
+	if (keynameres) {
+		valid_vk = true;
+		if(keynameres > 1) cstr_lwr(vk_str + 1, cstr_len(vk_str)); //TODO(fran): better lowercase functions, and work with locales
+	}
+	else {
+		const cstr* stringed_vk = vkToString(vk);
+		if (*stringed_vk) {
+			valid_vk = true;
+			int stringed_vk_len = cstr_len(stringed_vk)+1;
+			memcpy_s(vk_str, sizeof(vk_str), stringed_vk, stringed_vk_len * sizeof(*stringed_vk));
+		}
+	}
+
+	if (valid_vk) {
 		if (!first_mod) hotkey_str += L"+";
 		hotkey_str += vk_str;
 	}
@@ -122,7 +145,7 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 				HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_rejected);
 			}
 			SetTimer(state->wnd, HOTKEY_TIMER, timer_ms, NULL);
-			str hk_str = HOTKEY_hk_to_str(state->hk.hk_mod, state->hk.hk_trasn_nfo);
+			str hk_str = HOTKEY_hk_to_str(state->hk.hk_mod, state->hk.hk_trasn_nfo,state->hk.hk_vk);
 			SetWindowText(state->wnd, hk_str.c_str());
 
 		}
@@ -148,6 +171,8 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 
 		UnregisterHotKey(state->wnd, 0);//No matter what, if we got here we are gonna modify the hotkey, so we remove the previous one
 
+		//INFO: wow, Alt Gr sends Ctrl + Alt, how crazy is that //TODO(fran): should I bother with that? http://vision.ime.usp.br/~cejnog/librealsense/examples/third_party/glfw/src/win32_window.c
+
 		//NOTE: we ignore windows key, it's reserved for the system (VK_LWIN VK_RWIN), also mod keys by themselves(VK_CONTROL VK_SHIFT VK_MENU) and F12 which is reserved for use by debuggers
 		switch (vk) {
 		case VK_LWIN:
@@ -161,7 +186,7 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 		case VK_MENU:
 		case VK_F12:
 		{
-			str hk_str = HOTKEY_hk_to_str((ctrl_is_down ? MOD_CONTROL : 0) | (alt_is_down ? MOD_ALT : 0) | (shift_is_down ? MOD_SHIFT : 0), vk==VK_F12?lparam : 0);
+			str hk_str = HOTKEY_hk_to_str((ctrl_is_down ? MOD_CONTROL : 0) | (alt_is_down ? MOD_ALT : 0) | (shift_is_down ? MOD_SHIFT : 0), vk==VK_F12?lparam : 0, 0);
 			SetWindowText(state->wnd, hk_str.c_str());
 			*state->stored_hk = hotkey_nfo{ 0 };
 			HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_rejected);
@@ -190,7 +215,7 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 				HOTKEY_set_txt_brush(state, state->brushes.txt_hotkey_rejected);
 			}
 			SetTimer(state->wnd, HOTKEY_TIMER, timer_ms, NULL);
-			str hk_str = HOTKEY_hk_to_str(state->hk.hk_mod, state->hk.hk_trasn_nfo);
+			str hk_str = HOTKEY_hk_to_str(state->hk.hk_mod, state->hk.hk_trasn_nfo, state->hk.hk_vk);
 			SetWindowText(state->wnd, hk_str.c_str());
 			return 0;
 		} break;

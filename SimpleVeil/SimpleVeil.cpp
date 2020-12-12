@@ -1,4 +1,4 @@
-//Pointless warnings
+﻿//Pointless warnings
 #pragma warning(disable : 4505) //unreferenced local function has been removed
 #pragma warning(disable : 4201) //nonstandard extension used: nameless struct/union
 
@@ -19,6 +19,9 @@
 #include "SimpleVeil_veil.h"
 #include <vector>
 #include <algorithm>
+#include <io.h> //_setmode
+#include <fcntl.h> //_O_U16TEXT
+
 
 #pragma comment(lib, "comctl32.lib" ) //common controls lib
 #pragma comment(lib,"shlwapi.lib") //strcmpI strcpyN
@@ -91,6 +94,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     freopen_s(&___s, "CONIN$", "r", stdin);
     freopen_s(&___s, "CONOUT$", "w", stdout);
     freopen_s(&___s, "CONOUT$", "w", stderr);
+    //INFO: _setmode(_fileno(stdout), _O_U16TEXT); not really sure what it does, but I'd suppose it tries to make stdout output utf16, though the console is still unable to do it :c (also using printf instead of wprintf will trigger an assertion)
 #endif
 
     //Check that no instance is already running on this user session

@@ -168,6 +168,7 @@
     <ClInclude Include="unCap_Vector.h" />
     <ClInclude Include="windows_msg_mapper.h" />
     <ClInclude Include="windows_undoc.h" />
+    <ClInclude Include="windows_vk_mapper.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="LANGUAGE_MANAGER.cpp" />
