@@ -5,6 +5,7 @@
 #pragma warning(disable : 4201) //nonstandard extension used: nameless struct/union
 #pragma warning(disable : 4458) //declaration of '...' hides class member (warning from windows' code)
 #pragma warning(disable : 4505) //unreferenced local function has been removed
+#pragma warning(disable : 4702) //unreachable code
 
 #ifdef _DEBUG
 //TODO(fran): change to logging

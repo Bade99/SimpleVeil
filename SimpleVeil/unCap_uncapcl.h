@@ -165,15 +165,22 @@ RECT GetVirtualScreenRect() {
 		}
 	, (LPARAM)&rcCombined);
 	return rcCombined;
-	//NOTE: other way could be with getsystemmetrics, though I know that has a bug (at least in win7)
+	//NOTE: other way could be with GetSystemMetrics
 }
 
 void SIMPLEVEIL_resize_veil_cover_all_monitors(unCapClProcState* state) { //Simulates the window being maximized in all monitors
+	//NOTE: you could also change it in WM_GETMINMAXINFO https://stackoverflow.com/questions/64882357/windows-api-maximize-a-window-across-all-monitors
+#if 0
 	RECT virtual_screen = GetVirtualScreenRect();
-	SetWindowPos(state->settings->veil_wnd, NULL, virtual_screen.left, virtual_screen.top, virtual_screen.right, virtual_screen.bottom, SWP_NOACTIVATE | SWP_NOZORDER);
-	//WINDOWPLACEMENT wnd_place;
-	//wnd_place.
-	//SetWindowPlacement(wnd,)
+
+	SetWindowPos(state->settings->veil_wnd, NULL, virtual_screen.left, virtual_screen.top, RECTWIDTH(virtual_screen), RECTHEIGHT(virtual_screen), SWP_NOACTIVATE | SWP_NOZORDER);
+#else
+	int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+	int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+	int w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+	int h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+	SetWindowPos(state->settings->veil_wnd, NULL, x,y,w,h, SWP_NOACTIVATE | SWP_NOZORDER);
+#endif
 }
 
 void SIMPLEVEIL_update_veil_wnd(unCapClProcState* state) {
@@ -491,6 +498,10 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}break;
 	case WM_APPCOMMAND://This is triggered, for example, when the user presses one of the media keys (next track, prev, ...) in their keyboard
+	{
+		return DefWindowProc(hwnd, msg, wparam, lparam);
+	} break;
+	case WM_MOUSEWHEEL://I've crashed for rolling the wheel one too many times by now
 	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
