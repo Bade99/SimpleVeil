@@ -148,11 +148,12 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 			}
 			SetTimer(state->wnd, HOTKEY_TIMER, timer_ms, NULL);
 			str hk_str = HOTKEY_hk_to_str(state->hk.hk_mod, state->hk.hk_trasn_nfo,state->hk.hk_vk);
-			SetWindowText(state->wnd, hk_str.c_str());
+			SetWindowText(state->wnd, hk_str.c_str()); //BUG: edit control doesnt seem to be ready yet, cursor selection will be wrong
 
 		}
 		else {
-			SetWindowText(wnd, state->default_text);
+			//PostMessage(wnd, WM_SETTEXT, 0, (LPARAM)state->default_text); //TODO(fran): cant use Post to fix the bug, msg gets lost, why?
+			SetWindowText(wnd, state->default_text); //BUG: edit control doesnt seem to be ready yet, cursor selection will be wrong
 			HOTKEY_set_txt_brush(state, state->brushes.default_text);
 		}
 	}
