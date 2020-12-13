@@ -125,8 +125,8 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 
 		state->parent = GetParent(state->wnd);
 		state->msg_to_send = (UINT)(UINT_PTR)GetMenu(state->wnd);
-		cstr default_text[] = _t("Choose a hotkey");
-		memcpy(state->default_text, default_text, sizeof(default_text));//TODO(fran): check this is correct
+		str default_text = RS(LANG_HOTKEY_PLACEHOLDER);
+		memcpy_s(state->default_text,sizeof(state->default_text), default_text.c_str(), (default_text.length()+1)*sizeof(*default_text.c_str()));
 		if (state->stored_hk && state->stored_hk->hk_trasn_nfo && (state->stored_hk->hk_mod || state->stored_hk->hk_vk)) {//We saved a hotkey in a previous execution
 			state->hk = *state->stored_hk;
 
