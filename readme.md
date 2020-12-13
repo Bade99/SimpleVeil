@@ -3,4 +3,4 @@ All you'll ever need to reduce the brightness of your screen, works from Windows
 
 ![UI](https://i.imgur.com/RGA51sN.png)
 
-![Demo](https://i.imgur.com/KXxxsG2.gifv)
+![Demo](https://github.com/Bade99/SimpleVeil/blob/master/Icons/simpleveil5.gif)
