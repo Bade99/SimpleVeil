@@ -215,6 +215,15 @@ void SIMPLEVEIL_restore_wnd(unCapClProcState* state) {
 		ShowWindow(state->nc_parent, SW_SHOW);
 }
 
+void SIMPLEVEIL_toggle_wnd_visibility(unCapClProcState* state) {
+	if (!IsWindowVisible(state->nc_parent)) { //window is minimized
+		RestoreWndFromTray(state->nc_parent);//TODO(fran): the veil could be occluded, we should check that the veil is on top too
+	}
+	else { //window is not minimized //TODO(fran): _but_ could be occluded (in which case we want to SW_SHOW), there doesnt seem to be an easy way to know whether your window is actually visible to the user
+		MinimizeWndToTray(state->nc_parent);
+	}
+}
+
 LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	printf(msgToString(msg)); printf("\n");
 	unCapClProcState* state = UNCAPCL_get_state(hwnd);
@@ -294,7 +303,8 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		}
 		case WM_RBUTTONDOWN:
 		{
-			SIMPLEVEIL_restore_wnd(state);
+			//SIMPLEVEIL_restore_wnd(state);
+			SIMPLEVEIL_toggle_wnd_visibility(state);
 
 			break;
 		}
@@ -363,7 +373,8 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		{
 		case EDIT_HOTKEY:
 		{
-			SIMPLEVEIL_restore_wnd(state);
+			//SIMPLEVEIL_restore_wnd(state);
+			SIMPLEVEIL_toggle_wnd_visibility(state);
 			return 0;
 		} break;
 		case BUTTON_ONOFF:

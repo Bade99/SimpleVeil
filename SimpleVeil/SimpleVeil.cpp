@@ -41,8 +41,10 @@
 
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
-//TODO(fran): multimonitor support
+//TODO(fran): windows that are created after the veil is running might go over it, even if they arent topmost, we gotta find a way to keep making the veil the top most one
 //TODO(fran): better calculation for default wnd size, also store last screen size cause if it changes next time we gotta revert back to default wnd size
+//TODO(fran): win8 works well, UI for nonclient needs specific win8 work to match the style
+//TODO(fran): win7 works well, UI becomes basically unusable once you minimize and restore, also non client needs special win7 style drawing
 
 i32 n_tabs = 0;//Needed for serialization
 
@@ -117,7 +119,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
             //NOTE: im on a different thread and everything so I cant ask for the state, it doesnt retrieve something valid, therefore I cant get to my client, TODO IMPORTANT: this is a limitation that must be addressed from my framework, I need a way to get to communicate with my client from the parent, maybe a get client state msg is enough
             printf("Attempt to show previous instance\n");
             //PostMessage(existingApp's client wnd, TRAY, 0, WM_RBUTTONDOWN);
-            ShowWindow(existingApp,SW_SHOW);//TODO(fran): for now im content with just showing the wnd, no animation of it coming from the tray
+            if (!IsWindowVisible(existingApp)) { //window is minimized
+                ShowWindow(existingApp,SW_SHOW);//TODO(fran): for now im content with just showing the wnd, no animation of it coming from the tray //TODO(fran): the veil could be occluded, we should check that the veil is on top too
+            }
+            else { //window is not minimized //TODO(fran): _but_ could be occluded (in which case we want to SW_SHOW), there doesnt seem to be an easy way to know whether your window is actually visible to the user
+                ShowWindow(existingApp, SW_HIDE);
+            }
         }
         return 0; // Exit the app
     }
