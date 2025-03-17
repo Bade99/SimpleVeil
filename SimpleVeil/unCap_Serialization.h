@@ -189,6 +189,10 @@ namespace userial {
 		str res = to_str(var);
 		return res;
 	}
+	static str serialize(long var) {//Compiler complains of ambiguous when passing a RECT which has LONGs
+		str res = to_str(var);
+		return res;
+	}
 	static str serialize(f32 var) {
 		str res = to_str(var);
 		return res;

@@ -25,7 +25,7 @@ constexpr int y_pad = 10;
 
 constexpr int brightness_slider_max = 90;
 
-constexpr TCHAR appName[] = _t("SimpleVeil"); //Program name, to be displayed on the title of windows
+constexpr TCHAR appName[] = _t("SimpleVeil");
 
 struct unCapClSettings {
 
@@ -58,7 +58,7 @@ struct unCapClProcState {
 	};
 	union unCapClControls {
 		struct {
-			HWND button_on_off;
+			HWND toggle_button_on_off;
 			HWND slider_brightness;
 			HWND edit_hotkey;
 		};
@@ -77,41 +77,31 @@ void UNCAPCL_ResizeWindows(unCapClProcState* state) {
 	int w_pad = (int)((float)w * .05f);
 	int h_pad = (int)((float)h * .05f);
 
-	int btn_onoff_w = 70;
-	int btn_onoff_h = 30;
-	int btn_onoff_x = w - w_pad - btn_onoff_w;
-	int btn_onoff_y = (h - btn_onoff_h) / 2;
+	int toggle_btn_onoff_w = 70;
+	int toggle_btn_onoff_h = 30;
+	int toggle_btn_onoff_x = w - w_pad - toggle_btn_onoff_w;
+	int toggle_btn_onoff_y = (h - toggle_btn_onoff_h) / 2;
 
 	int slider_brightness_x = w_pad;
-	int slider_brightness_h = btn_onoff_h;
+	int slider_brightness_h = toggle_btn_onoff_h;
 	int slider_brightness_y = (h - slider_brightness_h) / 2;
-	int slider_brightness_w = max(btn_onoff_x - w_pad * 2, 0);
+	int slider_brightness_w = max(toggle_btn_onoff_x - w_pad * 2, 0);
 
 	int hotkey_w = w / 2;
 	int hotkey_x = (w - hotkey_w) / 2;
-	int hotkey_h = btn_onoff_h;
+	int hotkey_h = toggle_btn_onoff_h;
 	int hotkey_y = h - hotkey_h - h_pad;
 
-	//TODO(fran): resizer that takes into account multiple hwnds
 	MoveWindow(state->controls.slider_brightness, slider_brightness_x, slider_brightness_y, slider_brightness_w, slider_brightness_h, FALSE);
-	MoveWindow(state->controls.button_on_off, btn_onoff_x, btn_onoff_y, btn_onoff_w, btn_onoff_h, FALSE);
+	MoveWindow(state->controls.toggle_button_on_off, toggle_btn_onoff_x, toggle_btn_onoff_y, toggle_btn_onoff_w, toggle_btn_onoff_h, FALSE);
 	MoveWindow(state->controls.edit_hotkey, hotkey_x, hotkey_y, hotkey_w, hotkey_h, FALSE);
 }
 
-void SetText_file_app(HWND wnd, const TCHAR* new_filename, const TCHAR* new_appname) {
-	if (new_filename == NULL || *new_filename == NULL) {
-		SetWindowTextW(wnd, new_appname);
-	}
-	else {
-		std::wstring title_window = new_filename;
-		title_window += L" - ";
-		title_window += new_appname;
-		SetWindowTextW(wnd, title_window.c_str());
-	}
+void SetText_app_name(HWND wnd, const TCHAR* new_appname) {
+	SetWindowTextW(wnd, new_appname);
 }
 
 void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
-
 	state->controls.slider_brightness = CreateWindowExW(0, TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_NOTICKS | TBS_HORZ
 		, 0, 0, 0, 0, state->wnd, (HMENU)SLIDER_BRIGHTNESS, NULL, NULL);
 
@@ -122,10 +112,10 @@ void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
 
 	SetWindowSubclass(state->controls.slider_brightness, TrackbarProc, 0, 0);
 
-	state->controls.button_on_off = CreateWindowW(unCap_wndclass_button, NULL, WS_VISIBLE | WS_CHILD | WS_TABSTOP
+	state->controls.toggle_button_on_off = CreateWindowExW(WS_EX_COMPOSITED | WS_EX_TRANSPARENT, unCap_wndclass_toggle_button, NULL, WS_VISIBLE | WS_CHILD | WS_TABSTOP
 		, 0, 0, 0, 0, state->wnd, (HMENU)BUTTON_ONOFF, NULL, NULL);
-	//AWT(state->controls.button_removecomment, LANG_CONTROL_REMOVE);
-	UNCAPBTN_set_brushes(state->controls.button_on_off, TRUE, unCap_colors.Img, unCap_colors.ControlBk, unCap_colors.ControlTxt, unCap_colors.ControlBkPush, unCap_colors.ControlBkMouseOver);
+	UNCAPTGLBTN_set_brushes(state->controls.toggle_button_on_off, TRUE, unCap_colors.Img, unCap_colors.Img, unCap_colors.ToggleBk_On, unCap_colors.ToggleBk_Off, unCap_colors.ToggleBkPush_On, unCap_colors.ToggleBkPush_Off, unCap_colors.ToggleBkMouseOver_On, unCap_colors.ToggleBkMouseOver_Off);
+	UNCAPTGLBTN_set_state_reference(state->controls.toggle_button_on_off, &state->settings->is_veil_on);
 
 	state->controls.edit_hotkey = CreateWindowW(unCap_wndclass_edit_oneline, L"", WS_VISIBLE | WS_CHILD | ES_CENTER
 		, 0,0,0,0, state->wnd, (HMENU)EDIT_HOTKEY, NULL, NULL);
@@ -142,12 +132,8 @@ void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
 }
 
 void UNCAPCL_save_settings(unCapClProcState* state) {
-	//std::wstring info_save_file = GetInfoPath();
-
-	RECT rc; GetWindowRect(state->wnd, &rc);// MapWindowPoints(state->wnd, HWND_DESKTOP, (LPPOINT)&rc, 2); //TODO(fran): can I simply use GetWindowRect?
-
+	RECT rc; GetWindowRect(state->wnd, &rc);
 	state->settings->rc = rc;
-	//NOTE: the rest of settings are already being updated, and this one should too
 }
 
 unCapClProcState* UNCAPCL_get_state(HWND uncapcl) {
@@ -185,26 +171,12 @@ void SIMPLEVEIL_resize_veil_cover_all_monitors(unCapClProcState* state) { //Simu
 
 void SIMPLEVEIL_update_veil_wnd(unCapClProcState* state) {
 	if (state->settings->is_veil_on) {
-#if 0
-		//ShowWindow(state->settings->veil_wnd, SW_MAXIMIZE);
 		ShowWindow(state->settings->veil_wnd, SW_SHOW);
-#else
-		ShowWindow(state->settings->veil_wnd, SW_SHOW);
-#endif
 		SetLayeredWindowAttributes(state->settings->veil_wnd, 0, (BYTE)(((float)state->settings->slider_brightness_pos / 100.f) * 255.f), LWA_ALPHA);
 		BringWindowToTop(state->nc_parent);
 	}
 	else {
 		ShowWindow(state->settings->veil_wnd, SW_HIDE);
-	}
-}
-
-void SIMPLEVEIL_update_btn_onoff_text(unCapClProcState* state) {
-	if (state->settings->is_veil_on) {
-		SetWindowText(state->controls.button_on_off, RCS(LANG_BTN_TURN_OFF));
-	}
-	else {
-		SetWindowText(state->controls.button_on_off, RCS(LANG_BTN_TURN_ON));
 	}
 }
 
@@ -216,26 +188,16 @@ void SIMPLEVEIL_restore_wnd(unCapClProcState* state) {
 }
 
 void SIMPLEVEIL_toggle_wnd_visibility(unCapClProcState* state) {
-	if (!IsWindowVisible(state->nc_parent)) { //window is minimized
+	if (!IsWindowVisible(state->nc_parent)) //window is minimized
 		RestoreWndFromTray(state->nc_parent);//TODO(fran): the veil could be occluded, we should check that the veil is on top too
-	}
-	else { //window is not minimized //TODO(fran): _but_ could be occluded (in which case we want to SW_SHOW), there doesnt seem to be an easy way to know whether your window is actually visible to the user
+	else //window is not minimized //TODO(fran): _but_ could be occluded (in which case we want to SW_SHOW), there doesnt seem to be an easy way to know whether your window is actually visible to the user
 		MinimizeWndToTray(state->nc_parent);
-	}
 }
 
 LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-	printf(msgToString(msg)); printf("\n");
+	//printf(msgToString(msg)); printf("\n");
 	unCapClProcState* state = UNCAPCL_get_state(hwnd);
 	switch (msg) {
-	case WM_DRAWITEM:
-	{
-		DRAWITEMSTRUCT* item = (DRAWITEMSTRUCT*)lparam;
-		switch (wparam) {//wParam specifies the identifier of the control that needs painting
-		default: return DefWindowProc(hwnd, msg, wparam, lparam);
-		}
-		return 0;
-	} break;
 	case WM_CTLCOLORLISTBOX:
 	{
 		HDC comboboxDC = (HDC)wparam;
@@ -244,32 +206,19 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 
 		return (INT_PTR)unCap_colors.ControlBk;
 	}
-	case WM_CTLCOLOREDIT://TODO(fran): paint my own edit box so I can add a 1px border, OR paint it here, I do get the dc, and apply a clip region so no one overrides it
-	{//NOTE: there doesnt seem to be a way to modify the border that I added with WS_BORDER, it probably is handled outside of the control
-		/*HWND ctl = (HWND)lparam;
-		HDC dc = (HDC)wparam;
-		if (ctl == hInitialChar || ctl == hFinalChar)
-		{
-			SetBkColor(dc, ColorFromBrush(unCap_colors.ControlBk));
-			SetTextColor(dc, ColorFromBrush(unCap_colors.ControlTxt));
-			return (LRESULT)unCap_colors.ControlBk;
-		}
-		else return DefWindowProc(hwnd, msg, wparam, lparam);*/
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_CTLCOLORSTATIC:
 	{
 		//TODO(fran): check we are changing the right controls
 		HWND static_wnd = (HWND)lparam;
 		HDC dc = (HDC)wparam;
 		switch (GetDlgCtrlID(static_wnd)) {
-		default://NOTE: this is for state->controls.static_removecomment
-		{
-			//TODO(fran): there's something wrong with Initial & Final character controls when they are disabled, documentation says windows always uses same color text when window is disabled but it looks to me that it is using both this and its own color
-			SetBkColor(dc, ColorFromBrush(unCap_colors.ControlBk));
-			SetTextColor(dc, ColorFromBrush(unCap_colors.ControlTxt));
-			return (LRESULT)unCap_colors.ControlBk;
-		}
+			default://NOTE: this is for state->controls.static_removecomment
+			{
+				//TODO(fran): there's something wrong with Initial & Final character controls when they are disabled, documentation says windows always uses same color text when window is disabled but it looks to me that it is using both this and its own color
+				SetBkColor(dc, ColorFromBrush(unCap_colors.ControlBk));
+				SetTextColor(dc, ColorFromBrush(unCap_colors.ControlTxt));
+				return (LRESULT)unCap_colors.ControlBk;
+			}
 		}
 
 		return DefWindowProc(hwnd, msg, wparam, lparam);
@@ -280,13 +229,12 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 
 		UNCAPCL_add_controls(state, (HINSTANCE)GetWindowLongPtr(state->wnd, GWLP_HINSTANCE));
 
-		SetText_file_app(state->nc_parent, nullptr, appName);
+		SetText_app_name(state->nc_parent, appName);
 
 		state->settings->is_veil_on = true;
 
 		SIMPLEVEIL_resize_veil_cover_all_monitors(state);
 		SIMPLEVEIL_update_veil_wnd(state);
-		SIMPLEVEIL_update_btn_onoff_text(state);
 
 		BOOL tray_res = TRAY_HANDLER::Instance().CreateTrayIcon(state->wnd, 1, UNCAP_ICO_LOGO, TRAY, LANG_TRAY_TIP);
 		Assert(tray_res);
@@ -299,15 +247,12 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		case WM_LBUTTONDOWN:
 		{
 			SendMessage(state->wnd, WM_COMMAND, MAKELONG(BUTTON_ONOFF, 0), 0);
-			break;
-		}
+		} break;
 		case WM_RBUTTONDOWN:
 		{
 			//SIMPLEVEIL_restore_wnd(state);
 			SIMPLEVEIL_toggle_wnd_visibility(state);
-
-			break;
-		}
+		} break;
 		}
 		break;
 	}
@@ -382,8 +327,6 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 			state->settings->is_veil_on = !state->settings->is_veil_on;
 
 			SIMPLEVEIL_update_veil_wnd(state);
-			SIMPLEVEIL_update_btn_onoff_text(state);
-			
 		} break;
 		case UNCAPNC_MINIMIZE://NOTE: msg sent from the parent, expects return !=0 in case we handle it
 		{
@@ -411,117 +354,45 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		//PostMessage(state->wnd, WM_COMMAND, MAKELONG(BUTTON_ONOFF, 0), 0);
 		return 0;
 	} break;
+	case WM_CTLCOLOREDIT:
+	case WM_ERASEBKGND: //TODO(fran): or return 1, idk
+	case WM_DRAWITEM:
 	case WM_NCCALCSIZE:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_NOTIFYFORMAT:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_QUERYUISTATE: //Neat, I dont know who asks for this but it's interesting, you can tell whether you need to draw keyboards accels
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_MOVE:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_SHOWWINDOW:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_WINDOWPOSCHANGING:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_WINDOWPOSCHANGED:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_NCPAINT:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_ERASEBKGND:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);//TODO(fran): or return 1, idk
-	} break;
 	case WM_PAINT:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_NCHITTEST:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_SETCURSOR:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_MOUSEMOVE:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_MOUSEACTIVATE:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_LBUTTONDOWN:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_LBUTTONUP:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_RBUTTONDOWN:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_RBUTTONUP:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_CONTEXTMENU://Interesting
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
+	case WM_CONTEXTMENU:
 	case WM_DESTROY:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_DELETEITEM://sent to owner of combo/list box (for menus also) when it is destroyed or items are being removed. when you do SetMenu you also get this msg if you had a menu previously attached
-		//TODO(fran): we could try to use this to manage state destruction
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_GETTEXT://we should return NULL
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_PARENTNOTIFY://TODO(fran): see what we're getting
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	}break;
-	case WM_NOTIFY://TODO(fran): see what we're getting
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	}break;
-	case WM_APPCOMMAND://This is triggered, for example, when the user presses one of the media keys (next track, prev, ...) in their keyboard
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_MOUSEWHEEL://I've crashed for rolling the wheel one too many times by now
+	case WM_DELETEITEM:
+	case WM_GETTEXT:
+	case WM_PARENTNOTIFY:
+	case WM_NOTIFY:
+	case WM_APPCOMMAND:
+	case WM_MOUSEWHEEL:
 	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
 	default:
+	{
 #ifdef _DEBUG
 		Assert(0);
 #else 
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 #endif
+	} break;
 	}
 	return 0;
 }
@@ -536,7 +407,7 @@ ATOM init_wndclass_unCap_uncapcl(HINSTANCE inst) {
 	wcex.hIcon = 0;
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = unCap_colors.ControlBk;
-	wcex.lpszMenuName = 0;// MAKEINTRESOURCEW(IDC_SRTFIXWIN32);//TODO(fran): remove?
+	wcex.lpszMenuName = 0;
 	wcex.lpszClassName = unCap_wndclass_uncap_cl;
 	wcex.hIconSm = 0;
 

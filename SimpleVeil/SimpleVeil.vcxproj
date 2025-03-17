@@ -170,6 +170,7 @@
     <ClInclude Include="unCap_Reflection.h" />
     <ClInclude Include="unCap_Renderer.h" />
     <ClInclude Include="unCap_Serialization.h" />
+    <ClInclude Include="unCap_toggle_button.h" />
     <ClInclude Include="unCap_uncapcl.h" />
     <ClInclude Include="unCap_uncapnc.h" />
     <ClInclude Include="unCap_Vector.h" />

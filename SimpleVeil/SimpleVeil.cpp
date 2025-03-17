@@ -24,6 +24,7 @@
 #include "LANGUAGE_MANAGER.h"
 #include "unCap_uncapnc.h"
 #include "unCap_button.h"
+#include "unCap_toggle_button.h"
 #include "unCap_Reflection.h"
 #include "unCap_Serialization.h"
 #include "unCap_edit_oneline.h"
@@ -45,6 +46,7 @@
 //TODO(fran): better calculation for default wnd size, also store last screen size cause if it changes next time we gotta revert back to default wnd size
 //TODO(fran): win8 works well, UI for nonclient needs specific win8 work to match the style
 //TODO(fran): win7 works well, UI becomes basically unusable once you minimize and restore, also non client needs special win7 style drawing
+//TODO(fran): add the gamma table option, apart from changing brightness via a dark window there's the option to set the color mapping for the screen, that way we can map every pixel lower, this way we might be able to get around fullscreen applications like games, that once fullscreen wont allow anything to go above them without minimizing, problem is if we crash then the user has to restart the pc to reset the gamma mapping
 
 i32 n_tabs = 0;//Needed for serialization
 
@@ -173,6 +175,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     init_wndclass_unCap_uncapnc(hInstance);
 
     init_wndclass_unCap_button(hInstance);
+
+    init_wndclass_unCap_toggle_button(hInstance);
 
     init_wndclass_SimpleVeil_veil(hInstance,unCap_colors.Veil);
 

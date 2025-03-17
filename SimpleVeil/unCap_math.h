@@ -56,6 +56,18 @@ static i32 clamp(i32 min, i32 n, i32 max) { //clamps between [min,max]
 }
 
 //f32
+static f32 clamp(f32 min, f32 n, f32 max) { //clamps between [min,max]
+	f32 res = n;
+	if (res < min) res = min;
+	else if (res > max) res = max;
+	return res;
+}
+
+static f32 clamp01(f32 n) { //clamps between [0,1]
+	f32 res = clamp(0.f, n, 1.f);
+	return res;
+}
+
 static f32 safe_ratioN(f32 dividend, f32 divisor, f32 n) {
 	f32 res;
 	if (divisor != 0.f) {
@@ -94,4 +106,10 @@ static f32 length(v2 v) {
 f32 lerp(f32 n1, f32 t, f32 n2) {
 	//NOTE: interesting that https://en.wikipedia.org/wiki/Linear_interpolation mentions this is the Precise method
 	return (1.f - t) * n1 + t * n2;
+}
+
+//Ease in & out
+static f32 ParametricBlend(f32 t /*[0.0,1.0]*/) {
+	f32 sqt = t * t;
+	return sqt / (2.0f * (sqt - t) + 1.0f);
 }

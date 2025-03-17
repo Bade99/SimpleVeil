@@ -163,6 +163,44 @@ mask_bilinear_sample sample_bilinear_mask(img* mask, i32 x, i32 y) {
 	return sample;
 }
 
+void GetRoundRectPath(Gdiplus::GraphicsPath* path, RECT r, float diameter) {
+	float w = RECTWIDTH(r), h = RECTHEIGHT(r);
+	if (diameter > w) diameter = w;
+	if (diameter > h) diameter = h;
+
+	Gdiplus::RectF Corner(r.left, r.top, diameter, diameter);
+
+	path->Reset();
+
+	// top left
+	path->AddArc(Corner, 180, 90);
+
+	// top right
+	Corner.X += (w - diameter - 1);
+	path->AddArc(Corner, 270, 90);
+
+	// bottom right
+	Corner.Y += (h - diameter - 1);
+	path->AddArc(Corner, 0, 90);
+
+	// bottom left
+	Corner.X -= (w - diameter - 1);
+	path->AddArc(Corner, 90, 90);
+
+	path->CloseFigure();
+}
+
+void SetUpRenderSettings(Gdiplus::Graphics& graphics) {
+	graphics.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBilinear);
+	graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+	graphics.SetPageUnit(Gdiplus::UnitPixel);
+}
+
+Gdiplus::Color HbrushToGdiplusColor(HBRUSH br) {
+	Gdiplus::Color c; c.SetFromCOLORREF(ColorFromBrush(br));
+	return c;
+}
+
 namespace urender {
 	static ULONG_PTR gdiplusToken;//Horrible HACK, that gdi+ shouldnt need in the first place but the programmers had no idea what they were doing
 
@@ -367,6 +405,28 @@ namespace urender {
 			Gdiplus::Rect(xDest, yDest, wDest, hDest),
 			xSrc, ySrc, wSrc, hSrc,
 			Gdiplus::Unit::UnitPixel);//TODO(fran): get the current unit from the device
+	}
+
+	void draw_round_rectangle(HDC dest, RECT r, float radius, HBRUSH color_br) {
+		Gdiplus::Graphics graphics(dest);
+		SetUpRenderSettings(graphics);
+		auto diameter = radius * 2;
+		Gdiplus::SolidBrush br(HbrushToGdiplusColor(color_br));
+		Gdiplus::GraphicsPath path;
+		GetRoundRectPath(&path, r, diameter);
+		graphics.FillPath(&br, &path);
+	}
+
+	void draw_ellipse(HDC dest, rect_f32 r, HBRUSH color_br) {
+		Gdiplus::Graphics graphics(dest);
+		SetUpRenderSettings(graphics);
+		Gdiplus::SolidBrush br(HbrushToGdiplusColor(color_br));
+		
+		graphics.FillEllipse(&br, Gdiplus::RectF(r.left, r.top, r.w, r.h));
+	}
+
+	void draw_ellipse(HDC dest, RECT r, HBRUSH color_br) {
+		draw_ellipse(dest, rect_f32::from_RECT(r), color_br);
 	}
 
 	//NOTE: specific procedure for drawing images on windows' menus, other drawing functions may fail on specific situations

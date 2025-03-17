@@ -445,7 +445,7 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
 		if (lpParam->client_class_name) {
 			RECT rc = UNCAPNC_calc_client_rc(state);
-			state->client = CreateWindow(lpParam->client_class_name, TEXT(""), WS_CHILD | WS_VISIBLE, rc.left, rc.top, RECTWIDTH(rc), RECTHEIGHT(rc), state->wnd, 0, createnfo->hInstance, lpParam->client_lp_param);
+			state->client = CreateWindowEx(WS_EX_COMPOSITED, lpParam->client_class_name, TEXT(""), WS_CHILD | WS_VISIBLE, rc.left, rc.top, RECTWIDTH(rc), RECTHEIGHT(rc), state->wnd, 0, createnfo->hInstance, lpParam->client_lp_param);
 		}
 		return 0;
 	} break;

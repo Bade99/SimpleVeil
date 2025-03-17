@@ -27,6 +27,12 @@ union UNCAP_COLORS {//TODO(fran): HBRUSH Border
 		op(HBRUSH,Veil,CreateSolidBrush(RGB(0, 0, 0))) \
 		op(HBRUSH,HotkeyTxt_Accepted,CreateSolidBrush(RGB(0, 225, 0))) \
 		op(HBRUSH,HotkeyTxt_Rejected,CreateSolidBrush(RGB(225, 0, 0))) \
+		op(HBRUSH, ToggleBk_On, CreateSolidBrush(RGB(0, 110, 200))) \
+		op(HBRUSH, ToggleBk_Off, CreateSolidBrush(RGB(200, 0, 60))) \
+		op(HBRUSH, ToggleBkPush_On, CreateSolidBrush(RGB(0, 95, 190))) \
+		op(HBRUSH, ToggleBkPush_Off, CreateSolidBrush(RGB(190, 0, 45))) \
+		op(HBRUSH, ToggleBkMouseOver_On, CreateSolidBrush(RGB(0, 120, 215))) \
+		op(HBRUSH, ToggleBkMouseOver_Off, CreateSolidBrush(RGB(210, 0, 75))) \
 
 		foreach_color(_generate_member_no_default_init);
 

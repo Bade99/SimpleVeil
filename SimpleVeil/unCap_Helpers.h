@@ -113,20 +113,24 @@ static bool append_to_file(const cstr* filename, void* memory, u32 mem_sz) {
 	}
 	return res;
 }
-
+enum class CounterUnit {
+	seconds = 1,
+	milliseconds = 1000
+};
 //Timing info for testing
-static f64 GetPCFrequency() {
+static f64 GetPCFrequency(CounterUnit unit) {
 	LARGE_INTEGER li;
 	QueryPerformanceFrequency(&li);
-	return f64(li.QuadPart) / 1000.0; //milliseconds
+	return f64(li.QuadPart) / (f32)unit;
 }
 static i64 StartCounter() {
 	LARGE_INTEGER li;
 	QueryPerformanceCounter(&li);
 	return li.QuadPart;
 }
-static f64 EndCounter(i64 CounterStart, f64 PCFreq = GetPCFrequency())
+static f64 EndCounter(i64 CounterStart, CounterUnit unit = CounterUnit::milliseconds)
 {
+	f64 PCFreq = GetPCFrequency(unit);
 	LARGE_INTEGER li;
 	QueryPerformanceCounter(&li);
 	return double(li.QuadPart - CounterStart) / PCFreq;
@@ -248,6 +252,30 @@ static bool sameRc(RECT r1, RECT r2) {
 	bool res = r1.bottom == r2.bottom && r1.left == r2.left && r1.right == r2.right && r1.top == r2.top;
 	return res;
 }
+
+//rect_f32
+
+struct rect_f32 {
+	f32 left, top, w, h;
+
+	static rect_f32 from_RECT(RECT r) {
+		rect_f32 rf = { r.left, r.top, RECTWIDTH(r), RECTHEIGHT(r) };
+		return rf;
+	}
+	f32 right() const { return left + w; }
+	f32 bottom() const { return top + h; }
+	f32 center_x() const { return left + w / 2.f; }
+	f32 center_y() const { return top + h / 2.f; }
+	void cut_left(f32 w) { this->left += w; this->w -= w; }
+	void inflate(f32 dx, f32 dy) {
+		f32 half_dx = dx / 2.f;
+		f32 half_dy = dy / 2.f;
+		this->left -= half_dx;
+		this->top -= half_dy;
+		this->w += dx;
+		this->h += dy;
+	}
+};
 
 //HBRUSH related
 
