@@ -17,6 +17,8 @@ static LRESULT CALLBACK ToggleButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPA
 
 #define ANIMATION_TOGGLE_BUTTON 1
 
+#define ANIMATION_TOGGLE_BUTTON_TIME_MILLISECONDS 500
+
 struct ToggleButtonProcState { //NOTE: must be initialized to zero
 	HWND wnd;
 	HWND parent;
@@ -103,7 +105,7 @@ void UNCAPTGLBTN_stop_capturing_mouse(ToggleButtonProcState* state) {
 
 void UNCAPTGLBTN_create_animation_state(ToggleButtonProcState* state) {
 	state->animation_state.on = &state->on;
-	state->animation_state.percentage_speed = 1; //1 means do 100% in 1 second, .5 means do 50% in 1 second, and so on
+	state->animation_state.percentage_speed = 1000 / ANIMATION_TOGGLE_BUTTON_TIME_MILLISECONDS;
 	state->animation_state.percentage_position = **state->animation_state.on ? 1 : 0;
 }
 
