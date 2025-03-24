@@ -175,6 +175,10 @@ static size_t find_till_no_match(str s, size_t offset, str match) {
 
 #define RECTHEIGHT(r) (r.bottom >= r.top ? r.bottom - r.top : r.top - r.bottom )
 
+#define RECTW RECTWIDTH
+
+#define RECTH RECTHEIGHT
+
 static RECT rectWH(LONG left, LONG top, LONG width, LONG height) {
 	RECT r;
 	r.left = left;
@@ -223,7 +227,7 @@ static RECT rect1pxB(RECT r) {
 #define BORDERRIGHT 0x04
 #define BORDERBOTTOM 0x08
 //NOTE: borders dont get centered, if you choose 5 it'll go 5 into the rc. TODO(fran): centered borders
-static void FillRectBorder(HDC dc, RECT r, int thickness, HBRUSH br, int borders) {
+static void FillRectBorder(HDC dc, RECT r, int thickness, HBRUSH br, u8 borders) {
 	RECT borderrc;
 	if (borders & BORDERLEFT) { borderrc = rectNpxL(r, thickness); FillRect(dc, &borderrc, br); }
 	if (borders & BORDERTOP) { borderrc = rectNpxT(r, thickness); FillRect(dc, &borderrc, br); }
@@ -253,20 +257,27 @@ static bool sameRc(RECT r1, RECT r2) {
 	return res;
 }
 
+static f32 fully_roundrect_radius(RECT rc) {
+	auto res = min(RECTWIDTH(rc), RECTHEIGHT(rc)) * .5f;
+	return res;
+}
+
 //rect_f32
 
 struct rect_f32 {
 	f32 left, top, w, h;
 
-	static rect_f32 from_RECT(RECT r) {
-		rect_f32 rf = { r.left, r.top, RECTWIDTH(r), RECTHEIGHT(r) };
-		return rf;
-	}
+	static rect_f32 from_RECT(RECT r) { return rect_f32{ (f32)r.left, (f32)r.top, (f32)RECTWIDTH(r), (f32)RECTHEIGHT(r) }; }
+	static rect_f32 from_center_wh(f32 center_x, f32 center_y, f32 w, f32 h) { return rect_f32{ center_x - w * .5f, center_y - h * .5f, w, h }; }
+	static rect_f32 from_center_radius(f32 center_x, f32 center_y, f32 radius) { auto diameter = radius * 2;  return rect_f32::from_center_wh(center_x, center_y, diameter, diameter); }
+	RECT to_RECT() { return RECT{ (i32)this->left, (i32)this->top, (i32)this->right(), (i32)this->bottom() }; }
+
 	f32 right() const { return left + w; }
 	f32 bottom() const { return top + h; }
 	f32 center_x() const { return left + w / 2.f; }
 	f32 center_y() const { return top + h / 2.f; }
 	void cut_left(f32 w) { this->left += w; this->w -= w; }
+	void cut_right(f32 w) { this->w -= w; }
 	void inflate(f32 dx, f32 dy) {
 		f32 half_dx = dx / 2.f;
 		f32 half_dy = dy / 2.f;
@@ -275,6 +286,7 @@ struct rect_f32 {
 		this->w += dx;
 		this->h += dy;
 	}
+	f32 fully_roundrect_radius() { return min(this->w, this->h) * .5f; }
 };
 
 //HBRUSH related
@@ -605,4 +617,40 @@ inline void RestoreWndFromTray(HWND hWnd)
 		SetActiveWindow(hWnd);
 		SetForegroundWindow(hWnd);
 	}
+}
+
+inline void AskForRepaint(HWND wnd) {
+	InvalidateRect(wnd, NULL, TRUE);
+	//RedrawWindow(wnd, NULL, NULL, RDW_INVALIDATE);
+}
+
+//WM_SETTEXT has an insane default implementation, where, unexplicably, it DOES PAINTING. This allows you to handle set text normally, without having it paint over your stuff.
+inline LRESULT HandleSetText(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+	LONG_PTR  dwStyle = GetWindowLongPtr(wnd, GWL_STYLE);
+	SetWindowLongPtr(wnd, GWL_STYLE, dwStyle & ~WS_VISIBLE);
+	LRESULT ret = DefWindowProc(wnd, msg, wparam, lparam);
+	SetWindowLongPtr(wnd, GWL_STYLE, dwStyle);
+	RedrawWindow(wnd, NULL, NULL, RDW_INVALIDATE);
+	return ret;
+}
+
+//HRGN
+inline HRGN GetOldRegion(HDC dc) {
+	HRGN oldRegion = CreateRectRgn(0, 0, 0, 0); 
+	if (GetClipRgn(dc, oldRegion) != 1) { 
+		DeleteObject(oldRegion);
+		oldRegion = NULL; 
+	} 
+	return oldRegion;
+}
+
+inline void RestoreOldRegion(HDC dc, HRGN oldRegion) {
+	SelectClipRgn(dc, oldRegion);
+	if (oldRegion != NULL) DeleteObject(oldRegion);
+}
+
+inline HRGN CreateRoundRectRgnIndirect(RECT rc, f32 radius) {
+	auto r = rect_f32::from_RECT(rc);
+	auto diameter = radius * 2;
+	return CreateRoundRectRgn(r.left, r.top, r.right(), r.bottom(), diameter, diameter);
 }

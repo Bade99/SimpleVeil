@@ -48,12 +48,12 @@ struct HotkeyProcState {
 };
 
 //NOTE: the caller takes care of deleting the brushes, we dont do it
-void HOTKEY_set_brushes(HotkeyProcState* state, HBRUSH txt, HBRUSH default_text, HBRUSH txt_hotkey_accepted, HBRUSH txt_hotkey_rejected) {
+void HOTKEY_set_brushes(HotkeyProcState* state, HBRUSH txt, HBRUSH default_text, HBRUSH txt_hotkey_accepted, HBRUSH txt_hotkey_rejected, HWND wnd = nullptr) {
 	if (txt)state->brushes.txt = txt;
-	if (txt)state->brushes.default_text = default_text;
-	if (txt)state->brushes.txt_hotkey_accepted = txt_hotkey_accepted;
-	if (txt)state->brushes.txt_hotkey_rejected = txt_hotkey_rejected;
-	//TODO(fran): this is horrible, I cant ask for repaint, I really need to make the hotkey control its own instead of a subclass
+	if (default_text)state->brushes.default_text = default_text;
+	if (txt_hotkey_accepted)state->brushes.txt_hotkey_accepted = txt_hotkey_accepted;
+	if (txt_hotkey_rejected)state->brushes.txt_hotkey_rejected = txt_hotkey_rejected;
+	AskForRepaint(wnd ? wnd : state->wnd);
 }
 
 void HOTKEY_set_txt_brush(HotkeyProcState* state, HBRUSH txt_br) {//Internal function
@@ -149,7 +149,6 @@ LRESULT CALLBACK HotkeyProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, UI
 			SetTimer(state->wnd, HOTKEY_TIMER, timer_ms, NULL);
 			str hk_str = HOTKEY_hk_to_str(state->hk.hk_mod, state->hk.hk_trasn_nfo,state->hk.hk_vk);
 			SetWindowText(state->wnd, hk_str.c_str()); //BUG: edit control doesnt seem to be ready yet, cursor selection will be wrong
-
 		}
 		else {
 			//PostMessage(wnd, WM_SETTEXT, 0, (LPARAM)state->default_text); //TODO(fran): cant use Post to fix the bug, msg gets lost, why?

@@ -33,6 +33,11 @@ union UNCAP_COLORS {//TODO(fran): HBRUSH Border
 		op(HBRUSH, ToggleBkPush_Off, CreateSolidBrush(RGB(190, 0, 45))) \
 		op(HBRUSH, ToggleBkMouseOver_On, CreateSolidBrush(RGB(0, 120, 215))) \
 		op(HBRUSH, ToggleBkMouseOver_Off, CreateSolidBrush(RGB(210, 0, 75))) \
+		op(HBRUSH, TrackbarThumb, CreateSolidBrush(RGB(228, 228, 222))) \
+		op(HBRUSH, TrackbarChannelBk, CreateSolidBrush(RGB(40, 41, 35))) \
+		op(HBRUSH, TrackbarThumbChannelBk, CreateSolidBrush(RGB(80, 82, 70))) \
+		op(HBRUSH, TrackbarChannelBorder, CreateSolidBrush(RGB(120, 123, 105))) \
+		op(HBRUSH, TrackbarThumbChannelBorder, CreateSolidBrush(RGB(160, 164, 140))) \
 
 		foreach_color(_generate_member_no_default_init);
 
