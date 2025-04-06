@@ -336,6 +336,8 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		{
 			state->settings->is_veil_on = !state->settings->is_veil_on;
 
+			UNCAPTGLBTN_start_animation(UNCAPTGLBTN_get_state(state->controls.toggle_button_on_off)); //TODO: this is a HACK so that the toggle button re-renders when you click on the tray to show/hide the veil
+
 			SIMPLEVEIL_update_veil_wnd(state);
 		} break;
 		case UNCAPNC_MINIMIZE://NOTE: msg sent from the parent, expects return !=0 in case we handle it
