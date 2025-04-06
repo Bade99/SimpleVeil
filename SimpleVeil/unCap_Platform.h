@@ -21,8 +21,10 @@ typedef char32_t utf32;
 
 #ifdef UNICODE
 typedef std::wstring str;
+typedef std::wstring_view str_view;
 typedef wchar_t cstr;
 #else
 typedef std::string str;
+typedef std::string_view str_view;
 typedef char cstr;
 #endif

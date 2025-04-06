@@ -16,6 +16,7 @@
 #define IDC_SIMPLEVEIL                  109
 #define UNCAP_BMP_CLOSE                 109
 #define LANG_HOTKEY_PLACEHOLDER         109
+#define LANG_UPDATE_NEW_VERSION         110
 #define IDR_MAINFRAME                   128
 #define LANG_NC_MAXIMIZE                129
 #define LANG_NC_CLOSE                   130
