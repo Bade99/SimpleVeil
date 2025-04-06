@@ -26,7 +26,7 @@ constexpr int y_pad = 10;
 constexpr int brightness_slider_max = 90;
 
 #define APP_NAME "SimpleVeil"
-#define APP_VERSION "1.0.1"
+#define APP_VERSION "1.0.2"
 
 constexpr TCHAR appName[] = TEXT(APP_NAME);
 
