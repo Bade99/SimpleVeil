@@ -328,6 +328,7 @@ void InternetStatusCallback(HINTERNET hInternet, DWORD_PTR dwContext, DWORD dwIn
     default:
     {
         printf("%s\n", internetStatusToString(dwInternetStatus));
+        Sleep(100); //TODO: this is a colossal HACK. I have no clue why, but there's some dwInternetStatus that must have some kind of race condition causing it to fail. I must continue investigating
     } break;
     }
 }
