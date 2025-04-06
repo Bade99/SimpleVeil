@@ -237,37 +237,10 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	//printf(msgToString(msg)); printf("\n");
 	unCapNcProcState* state = UNCAPNC_get_state(hwnd);
 
-	{
-#if 0
-		RECT rw; GetWindowRect(hwnd, &rw);
-		printf("left %d top %d right %d bottom %d width %d height %d\n", rw.left, rw.top, rw.right, rw.bottom, RECTWIDTH(rw), RECTHEIGHT(rw));
-#endif
-	}
-
 	constexpr int menu_delay_ms = 100;
 
 	switch (msg)
 	{
-	case WM_UAHDESTROYWINDOW: //Only called when the window is being destroyed, wparam=lparam=0
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_UAHDRAWMENU: //Sent for NON MF_OWNERDRAW menus
-	case WM_UAHDRAWMENUITEM:
-	case WM_UAHMEASUREMENUITEM:
-	case WM_UAHNCPAINTMENUPOPUP:
-	case WM_UAHUPDATE:
-	{
-		//printf(msgToString(msg)); printf("\n\n\n\n\n");
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_UAHINITMENU: //After a SetMenu: lParam=some system generated HMENU with your HMENU stored in the ""unused"" member ; wParam=0
-							//NOTE: this system HMENU uses the first byte from the top 32bits, no other HMENU does that
-	{
-		//NOTE: for some reason, after SetMenu, this msg gets sent more than once after different events, but always with the same params. This does not depend on the number of menus/submenus it has, but it seems like SetMenu checks that your HMENU has at least one submenu, otherwise this msg doesnt get sent
-		//NOTE: from tests I can say semi confidently that the menubar uses WM_SIZE for updating, at least sometimes
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_WINDOWPOSCHANGED: //TODO(fran): we can use this guy to replace WM_SIZE and WM_MOVE by not calling defwindowproc
 	{
 		UNCAPNC_calc_caption(state);
@@ -937,7 +910,6 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		default: return DefWindowProc(hwnd, msg, wparam, lparam);
 		}
 	} break;
-
 	case WM_COMMAND:
 	{
 		//TODO(fran): reserved msg range for UNCAPNC
@@ -973,8 +945,9 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		}
 	} break;
 	case WM_DESTROY:
+	{
 		PostQuitMessage(0);
-		break;
+	} break;
 	case WM_GETMINMAXINFO:
 		//FIRST msg sent to the window
 		//Sent when size or position are about to change
@@ -1009,82 +982,9 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 #endif
 	} break;
-	case WM_STYLECHANGING:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_STYLECHANGED:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_PARENTNOTIFY://Different notifs about your childs
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_WINDOWPOSCHANGING:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_SHOWWINDOW:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_ACTIVATEAPP:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_ACTIVATE:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_IME_SETCONTEXT:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_IME_NOTIFY:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_GETOBJECT:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_SETFOCUS:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_NCPAINT:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_ERASEBKGND://havent found a good use for this msg yet
 	{
 		return 1;
-		//return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_MOVE:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_GETTEXT:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_GETICON:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_DWMNCRENDERINGCHANGED:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_KILLFOCUS: //TODO(fran): in case I should stop tracking the mouse or things the like
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_SETCURSOR:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
 	case WM_NCMOUSEMOVE:
 	{
@@ -1128,14 +1028,6 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			RECT menurc = UNCAPNC_calc_menu_rc(state);
 			RedrawWindow(state->wnd, &menurc, NULL, RDW_INVALIDATE);//TODO(fran): we only need to redraw the menu rc
 		}
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_MOUSEACTIVATE:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_CONTEXTMENU://Interesting (also seems like the defproc of a child asks the parent for it)
-	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
 	case WM_TIMER:
@@ -1191,37 +1083,9 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		}
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
-	case WM_NCLBUTTONUP:
+	case WM_DISPLAYCHANGE:
 	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_SYSCOMMAND://Menu and nc buttons related //TODO(fran): maybe I should use this for sending max,min,close
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_CAPTURECHANGED://just a notif
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_ENTERSIZEMOVE://window entered moving/sizing loop
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_SIZING://sent while user is resizing, you can monitor and change size/pos of "drag" rectangle
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_EXITSIZEMOVE:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_MOVING:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_NCRBUTTONDOWN:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
+		return SendMessage(state->client, msg, wparam, lparam);
 	} break;
 	case WM_NCRBUTTONUP:
 	{
@@ -1229,78 +1093,65 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		UNCAPNC_show_rclickmenu(state, mouse);
 		return 0;
 	} break;
+	case WM_UAHDESTROYWINDOW: //Only called when the window is being destroyed, wparam=lparam=0
+	case WM_UAHDRAWMENU: //Sent for NON MF_OWNERDRAW menus
+	case WM_UAHDRAWMENUITEM:
+	case WM_UAHMEASUREMENUITEM:
+	case WM_UAHNCPAINTMENUPOPUP:
+	case WM_UAHUPDATE:
+	case WM_UAHINITMENU: //After a SetMenu: lParam=some system generated HMENU with your HMENU stored in the ""unused"" member ; wParam=0
+							//NOTE: this system HMENU uses the first byte from the top 32bits, no other HMENU does that
+		//NOTE: for some reason, after SetMenu, this msg gets sent more than once after different events, but always with the same params. This does not depend on the number of menus/submenus it has, but it seems like SetMenu checks that your HMENU has at least one submenu, otherwise this msg doesnt get sent
+		//NOTE: from tests I can say semi confidently that the menubar uses WM_SIZE for updating, at least sometimes
+	case WM_STYLECHANGING:
+	case WM_STYLECHANGED:
+	case WM_PARENTNOTIFY://Different notifs about your childs
+	case WM_WINDOWPOSCHANGING:
+	case WM_SHOWWINDOW:
+	case WM_ACTIVATEAPP:
+	case WM_ACTIVATE:
+	case WM_IME_SETCONTEXT:
+	case WM_IME_NOTIFY:
+	case WM_GETOBJECT:
+	case WM_SETFOCUS:
+	case WM_NCPAINT:
+	case WM_MOVE:
+	case WM_GETTEXT:
+	case WM_GETICON:
+	case WM_DWMNCRENDERINGCHANGED:
+	case WM_KILLFOCUS: //TODO(fran): in case I should stop tracking the mouse or things the like
+	case WM_SETCURSOR:
+	case WM_MOUSEACTIVATE:
+	case WM_CONTEXTMENU://Interesting (also seems like the defproc of a child asks the parent for it)
+	case WM_NCLBUTTONUP:
+	case WM_SYSCOMMAND://Menu and nc buttons related //TODO(fran): maybe I should use this for sending max,min,close
+	case WM_CAPTURECHANGED://just a notif
+	case WM_ENTERSIZEMOVE://window entered moving/sizing loop
+	case WM_SIZING://sent while user is resizing, you can monitor and change size/pos of "drag" rectangle
+	case WM_EXITSIZEMOVE:
+	case WM_MOVING:
+	case WM_NCRBUTTONDOWN:
 	case WM_ENTERMENULOOP://notif
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_INITMENU://sent before the menu becomes active, we can modify it before it is displayed <- TODO(fran)
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_MENUSELECT://the user selected a menu item
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_EXITMENULOOP://notif
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_INITMENUPOPUP://sent before a submenu/popup menu is displayed, eg when the user clicks on an item from the menu bar, TODO(fran): here we can modify the menu before it is displayed
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_ENTERIDLE://menu has no more msgs to process in its queue
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_UNINITMENUPOPUP:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_CANCELMODE://system wants us to stop mouse tracking and similar
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_DWMCOLORIZATIONCOLORCHANGED://why opening spy++ generated this msg? what u doing spy++?
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_KEYUP://Non system key released
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_QUERYOPEN://Sent when we are in icon form, aka minimized, and the user wants us restored //TODO(fran): we can use this
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_SYNCPAINT://Interesting
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_KEYDOWN://here we could parse keyboard shortcuts
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_SETTINGCHANGE://also WM_WININICHANGE for older things (yes, same msg, slightly different params)
 		//Sent to all top level windows after someone changes some windows settings with SystemParametersInfo
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_IME_REQUEST://TODO(fran): looks like you can set up the ime wnd from here
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_SYSKEYUP://No need for that
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_APPCOMMAND://This is triggered, for example, when the user presses one of the media keys (next track, prev, ...) in their keyboard
+	case WM_MOUSEWHEEL:
 	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_DISPLAYCHANGE:
-	{
-		return SendMessage(state->client, msg, wparam, lparam);
 	} break;
 	default:
 		if (msg >= 0xC000 && msg <= 0xFFFF) {//String messages for use by applications  

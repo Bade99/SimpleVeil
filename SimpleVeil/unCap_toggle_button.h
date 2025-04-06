@@ -6,7 +6,6 @@
 #include "unCap_Renderer.h"
 #include "windows_undoc.h"
 
-//NOTE: this buttons can have text or an img, but not both at the same time
 //NOTE: it's important that the parent uses WS_CLIPCHILDREN to avoid horrible flickering
 //NOTE: this button follows the standard button tradition of getting the msg to send to the parent from the hMenu param of CreateWindow/Ex
 //NOTE: when clicked notifies the parent through WM_COMMAND with LOWORD(wParam)= msg number specified in hMenu param of CreateWindow/Ex ; HIWORD(wParam)=0 ; lParam= HWND of the button. Just like the standard button
@@ -73,10 +72,6 @@ ToggleButtonProcState* UNCAPTGLBTN_get_state(HWND hwnd) {
 	return state;
 }
 
-void UNCAPTGLBTN_ask_for_repaint(ToggleButtonProcState* state) {
-	InvalidateRect(state->wnd, NULL, FALSE);
-}
-
 //NOTE: any NULL HBRUSH remains unchanged
 void UNCAPTGLBTN_set_brushes(HWND uncap_btn, BOOL repaint, 
 	HBRUSH border, HBRUSH fg,
@@ -93,7 +88,7 @@ void UNCAPTGLBTN_set_brushes(HWND uncap_btn, BOOL repaint,
 		if (bk_push_off)state->brushes.bk_push_off = bk_push_off;
 		if (bk_mouseover_on)state->brushes.bk_mouseover_on = bk_mouseover_on;
 		if (bk_mouseover_off)state->brushes.bk_mouseover_off = bk_mouseover_off;
-		if (repaint) UNCAPTGLBTN_ask_for_repaint(state);
+		if (repaint) AskForRepaint(state->wnd);
 	}
 }
 
@@ -131,7 +126,7 @@ void UNCAPTGLBTN_play_animation(HWND hwnd, UINT, UINT_PTR anim_id, DWORD) {
 
 	state->animation_state.percentage_position = new_percentage_position;
 
-	UNCAPTGLBTN_ask_for_repaint(state);
+	AskForRepaint(state->wnd);
 
 	if (on - state->animation_state.percentage_position)
 		UNCAPTGLBTN_queue_next_animation_frame(state, anim_id);
@@ -158,13 +153,13 @@ static LRESULT CALLBACK ToggleButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPA
 		if (state->OnMouseTracking) UNCAPTGLBTN_stop_capturing_mouse(state);
 		state->onLMouseClick = false;
 		state->onMouseOver = false;
-		UNCAPTGLBTN_ask_for_repaint(state);
+		AskForRepaint(state->wnd);
 		return 0;
 	} break;
 	
 	case WM_CAPTURECHANGED:
 	{
-		UNCAPTGLBTN_ask_for_repaint(state);
+		AskForRepaint(state->wnd);
 		return 0;
 	} break;
 	case WM_LBUTTONUP:
@@ -187,13 +182,13 @@ static LRESULT CALLBACK ToggleButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPA
 			state->OnMouseTracking = true;
 			state->onLMouseClick = true;
 		}
-		UNCAPTGLBTN_ask_for_repaint(state);
+		AskForRepaint(state->wnd);
 		return 0;
 	} break;
 	case WM_MOUSELEAVE:
 	{
 		state->onMouseOver = false;
-		UNCAPTGLBTN_ask_for_repaint(state);
+		AskForRepaint(state->wnd);
 		return 0;
 	} break;
 	case WM_MOUSEMOVE:
@@ -204,7 +199,7 @@ static LRESULT CALLBACK ToggleButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPA
 		state->onMouseOver = test_pt_rc(mouse, rc);
 		bool state_change = prev_onMouseOver != state->onMouseOver;
 		if (state_change) {
-			UNCAPTGLBTN_ask_for_repaint(state);
+			AskForRepaint(state->wnd);
 			TRACKMOUSEEVENT track;
 			track.cbSize = sizeof(track);
 			track.hwndTrack = state->wnd;
@@ -243,8 +238,8 @@ static LRESULT CALLBACK ToggleButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPA
 		HDC dc = BeginPaint(state->wnd, &ps); defer{ EndPaint(state->wnd, &ps); };
 
 		RECT r; GetClientRect(state->wnd, &r);
-		int h = RECTHEIGHT(r);
-		int w = RECTWIDTH(r);
+		int h = RECTH(r);
+		int w = RECTW(r);
 
 		auto& brushes = state->brushes;
 		HBRUSH bk_on_br, bk_off_br;
@@ -269,9 +264,6 @@ static LRESULT CALLBACK ToggleButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPA
 		f32 button_displacement = state->animation_state.percentage_position * (w - h);
 		i32 button_left = r.left + button_displacement;
 		RECT button{ button_left, r.top, button_left + h, h };
-		rect_f32 deflated_button = rect_f32::from_RECT(button);
-		f32 deflation = -2;
-		deflated_button.inflate(deflation, deflation);
 
 		if (on || state->animation_state.percentage_position) {
 			RECT cover_on = button;
@@ -279,7 +271,8 @@ static LRESULT CALLBACK ToggleButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPA
 			urender::draw_round_rectangle(dc, cover_on, h / 2.f, bk_on_br);
 		}
 
-		urender::draw_ellipse(dc, deflated_button, brushes.fg);
+		RECT button_with_correction = button; button_with_correction.right--; button_with_correction.bottom--;
+		urender::draw_ellipse(dc, rect_f32::from_RECT(button_with_correction), brushes.fg);
 
 		return 0;
 	} break;

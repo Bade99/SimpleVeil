@@ -376,17 +376,14 @@ _internet_context* check_for_updates() {
     return &internet_context;
 }
 
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
+int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPWSTR /*lpCmdLine*/, _In_ int nCmdShow)
 {
-    UNREFERENCED_PARAMETER(lpCmdLine);//TODO(fran): get dropped files (CommandLineToArgvW)
-
 #ifdef _SHOWCONSOLE
     AllocConsole();
     FILE* ___s; defer{ fclose(___s); };
     freopen_s(&___s, "CONIN$", "r", stdin);
     freopen_s(&___s, "CONOUT$", "w", stdout);
     freopen_s(&___s, "CONOUT$", "w", stderr);
-    //INFO: _setmode(_fileno(stdout), _O_U16TEXT); not really sure what it does, but I'd suppose it tries to make stdout output utf16, though the console is still unable to do it :c (also using printf instead of wprintf will trigger an assertion)
 #endif
 
     //Check that no instance is already running on this user session
@@ -413,7 +410,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     }
     defer{ ReleaseMutex(single_instance_mutex);	CloseHandle(single_instance_mutex); };
 
-    auto internet_context = check_for_updates(); defer{ internet_context->close_handles(); };
+    auto internet_context = check_for_updates(); defer{ internet_context->close_handles(); }; //TODO: allow the user to configure the 'check for updates' frequency: on app startup, every day, every week, every month, off
 
     urender::init(); defer{ urender::uninit(); };
 

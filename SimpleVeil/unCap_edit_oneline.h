@@ -17,6 +17,9 @@ constexpr TCHAR unCap_wndclass_edit_oneline[] = TEXT("unCap_wndclass_edit_onelin
 
 static LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
+#define ES_ROUNDRECT 0x0001'0000L
+#define ES_ELLIPSIS 0x0002'0000L
+
 struct char_sel { int x, y; };//xth character of the yth row, goes left to right and top to bottom
 struct EditOnelineProcState {
 	HWND wnd;
@@ -234,9 +237,62 @@ void EDITONELINE_set_composition_font(EditOnelineProcState* state)//TODO(fran): 
 	}
 }
 
+void EDITONELINE_draw_text(HDC dc, RECT rc, HBRUSH txt_br, HBRUSH bk_br, LONG_PTR style, HFONT font, str text, i32 padding_x)
+{
+	HFONT oldfont = SelectFont(dc, font); defer{ SelectFont(dc, oldfont); };
+	UINT oldalign = GetTextAlign(dc); defer{ SetTextAlign(dc,oldalign); };
+
+	COLORREF oldtxtcol = SetTextColor(dc, ColorFromBrush(txt_br)); defer{ SetTextColor(dc, oldtxtcol); };
+	COLORREF oldbkcol = SetBkColor(dc, ColorFromBrush(bk_br)); defer{ SetBkColor(dc, oldbkcol); };
+
+	if (false) {
+		TEXTMETRIC tm;
+		GetTextMetrics(dc, &tm);
+		// Calculate vertical position for the string so that it will be vertically centered
+		// We are single line so we want vertical alignment always
+		int yPos = (rc.bottom + rc.top - tm.tmHeight) / 2;
+		int xPos;
+		//ES_LEFT ES_CENTER ES_RIGHT
+		//TODO(fran): store char positions in the vector
+		if (style & ES_CENTER) {
+			SetTextAlign(dc, TA_CENTER);
+			xPos = (rc.right - rc.left) / 2;
+		}
+		else if (style & ES_RIGHT) {
+			SetTextAlign(dc, TA_RIGHT);
+			xPos = rc.right - padding_x;
+		}
+		else /*ES_LEFT*/ {//NOTE: ES_LEFT==0, that was their way of defaulting to left
+			SetTextAlign(dc, TA_LEFT);
+			xPos = rc.left + padding_x;
+		}
+
+		TextOut(dc, xPos, yPos, text.c_str(), (i32)text.length());
+	}
+	else {
+		SetTextAlign(dc, TA_LEFT | TA_TOP | TA_NOUPDATECP); //required by DrawText
+		auto alignment = style & (DT_CENTER | DT_RIGHT | DT_LEFT);
+		auto ellipsis_and_tabs = style & ES_ELLIPSIS ? DT_END_ELLIPSIS : DT_EXPANDTABS;
+
+		auto text_rc = rect_f32::from_RECT(rc);
+
+		if (style & ES_CENTER)
+			text_rc.inflate(-padding_x, 0);
+		else if (style & ES_RIGHT)
+			text_rc.cut_right(padding_x);
+		else /*ES_LEFT*/
+			text_rc.cut_left(padding_x);
+
+		auto text_r = text_rc.to_RECT();
+		DrawText(dc, text.c_str(), text.length(), &text_r, DT_SINGLELINE | DT_VCENTER | alignment | ellipsis_and_tabs);
+	}
+}
+
 //TODO(fran): some day paint/handle my own IME window
 LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-	printf(msgToString(msg)); printf("\n");
+	//printf(msgToString(msg)); printf("\n");
+	//TODO(fran): there's something here that's causing lots of unnecessary re-renders
+
 	EditOnelineProcState* state = EDITONELINE_get_state(hwnd);
 	switch (msg) {
 		//TODOs(fran):
@@ -283,25 +339,6 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 			return 0;
 		}
 	} break;
-	case WM_CREATE://3rd msg received
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_SIZE: {//4th, strange, I though this was sent only if you didnt handle windowposchanging (or a similar one)
-		//NOTE: neat, here you resize your render target, if I had one or cared to resize windows' https://docs.microsoft.com/en-us/windows/win32/winmsg/wm-size
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_MOVE: //5th. Sent on startup after WM_SIZE, although possibly sent by DefWindowProc after I let it process WM_SIZE, not sure
-	{
-		//This msg is received _after_ the window was moved
-		//Here you can obtain x and y of your window's client area
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_SHOWWINDOW: //6th. On startup I received this cause of WS_VISIBLE flag
-	{
-		//Sent when window is about to be hidden or shown, doesnt let it clear if we are in charge of that or it's going to happen no matter what we do
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_NCPAINT://7th
 	{
 		//Paint non client area, we shouldnt have any
@@ -333,10 +370,6 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 		if (redraw) RedrawWindow(state->wnd, NULL, NULL, RDW_INVALIDATE);
 		return 0;
 	} break;
-	case WM_DESTROY:
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_NCDESTROY://Last msg. Sent _after_ WM_DESTROY
 	{
 		//NOTE: the brushes are deleted by whoever created them
@@ -352,8 +385,7 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 	{
 		PAINTSTRUCT ps;
 		RECT rc; GetClientRect(state->wnd, &rc);
-		//ps.rcPaint
-		HDC dc = BeginPaint(state->wnd, &ps);
+		HDC dc = BeginPaint(state->wnd, &ps); defer{ EndPaint(state->wnd, &ps); };
 		int border_thickness = 1;
 		HBRUSH bk_br, txt_br, border_br;
 		if (IsWindowEnabled(state->wnd)) {
@@ -366,60 +398,34 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 			txt_br = state->brushes.txt_dis;
 			border_br = state->brushes.border_dis;
 		}
-		FillRectBorder(dc, rc, border_thickness, border_br, BORDERLEFT | BORDERTOP | BORDERRIGHT | BORDERBOTTOM);
+		LONG_PTR style = GetWindowLongPtr(state->wnd, GWL_STYLE);
 
-		{
-			//Clip the drawing region to avoid overriding the border
-			HRGN restoreRegion = CreateRectRgn(0, 0, 0, 0); if (GetClipRgn(dc, restoreRegion) != 1) { DeleteObject(restoreRegion); restoreRegion = NULL; } defer{ SelectClipRgn(dc, restoreRegion); if (restoreRegion != NULL) DeleteObject(restoreRegion); };
-			{
-				RECT left = rectNpxL(rc, border_thickness);
-				RECT top = rectNpxT(rc, border_thickness);
-				RECT right = rectNpxR(rc, border_thickness);
-				RECT bottom = rectNpxB(rc, border_thickness);
-				ExcludeClipRect(dc, left.left, left.top, left.right, left.bottom);
-				ExcludeClipRect(dc, top.left, top.top, top.right, top.bottom);
-				ExcludeClipRect(dc, right.left, right.top, right.right, right.bottom);
-				ExcludeClipRect(dc, bottom.left, bottom.top, bottom.right, bottom.bottom);
-				//TODO(fran): this aint too clever, it'd be easier to set the clipping region to the deflated rect
-			}
-			//Draw
+		RECT bk_rc = rc; InflateRect(&bk_rc, -border_thickness, -border_thickness);
+		HRGN oldRegion = GetOldRegion(dc); defer{ RestoreOldRegion(dc, oldRegion); };
 
-			RECT bk_rc = rc; InflateRect(&bk_rc, -border_thickness, -border_thickness);
-			FillRect(dc, &bk_rc, bk_br);//TODO(fran): we need to clip this where the text was already drawn, this will be the last thing we paint
+		//TODO: draw the border and fill the background together in a single call
 
-			{
-				HFONT oldfont = SelectFont(dc, state->font); defer{ SelectFont(dc, oldfont); };
-				UINT oldalign = GetTextAlign(dc); defer{ SetTextAlign(dc,oldalign); };
+		i32 pad_x = 0; //TODO: this creates a slightly different alignment compared to what we are currently calculating, thus breaking mouse click mapping to character positions
+		if (style & ES_ROUNDRECT) {
+			f32 radius = fully_roundrect_radius(rc);
+			urender::draw_round_rectangle_outline(dc, rc, radius, border_br, border_thickness);
+			HRGN drawRegion = CreateRoundRectRgnIndirect(bk_rc, radius); defer{ DeleteObject(drawRegion); };
+			SelectClipRgn(dc, drawRegion);
+			//TODO: should we draw the background?
 
-				COLORREF oldtxtcol = SetTextColor(dc, ColorFromBrush(txt_br)); defer{ SetTextColor(dc, oldtxtcol); };
-				COLORREF oldbkcol = SetBkColor(dc, ColorFromBrush(bk_br)); defer{ SetBkColor(dc, oldbkcol); };
-
-				TEXTMETRIC tm;
-				GetTextMetrics(dc, &tm);
-				// Calculate vertical position for the string so that it will be vertically centered
-				// We are single line so we want vertical alignment always
-				int yPos = (rc.bottom + rc.top - tm.tmHeight) / 2;
-				int xPos;
-				LONG_PTR  style = GetWindowLongPtr(state->wnd, GWL_STYLE);
-				//ES_LEFT ES_CENTER ES_RIGHT
-				//TODO(fran): store char positions in the vector
-				if (style & ES_CENTER) {
-					SetTextAlign(dc, TA_CENTER);
-					xPos = (rc.right - rc.left) / 2;
-				}
-				else if (style & ES_RIGHT) {
-					SetTextAlign(dc, TA_RIGHT);
-					xPos = rc.right - state->char_pad_x;
-				}
-				else /*ES_LEFT*/ {//NOTE: ES_LEFT==0, that was their way of defaulting to left
-					SetTextAlign(dc, TA_LEFT);
-					xPos = rc.left + state->char_pad_x;
-				}
-
-				TextOut(dc, xPos, yPos, state->char_text.c_str(), (int)state->char_text.length());
-			}
+			pad_x = style & ES_CENTER ? ceilf(radius * .5f) : state->char_pad_x;
 		}
-		EndPaint(hwnd, &ps);
+		else {
+			FillRectBorder(dc, rc, border_thickness, border_br, BORDERLEFT | BORDERTOP | BORDERRIGHT | BORDERBOTTOM);
+			HRGN drawRegion = CreateRectRgnIndirect(&bk_rc); defer{ DeleteObject(drawRegion); };
+			SelectClipRgn(dc, drawRegion);
+
+			FillRect(dc, &bk_rc, bk_br);
+
+			pad_x = style & ES_CENTER ? 1 : state->char_pad_x;
+		}
+		EDITONELINE_draw_text(dc, bk_rc, txt_br, bk_br, style, state->font, state->char_text, pad_x);
+
 		return 0;
 	} break;
 	case WM_ENABLE:
@@ -464,12 +470,6 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 			3. If there is no class cursor, set the cursor to the arrow cursor.
 		*/
 		//NOTE: I think this is good enough for now
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_MOUSEMOVE /*WM_MOUSEFIRST*/://When the mouse goes over us this is 3rd msg received
-	{
-		//wparam = test for virtual keys pressed
-		POINT mouse = { GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };//Client coords, relative to upper-left corner of client area
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
 	case WM_MOUSEACTIVATE://When the user clicks on us this is 1st msg received
@@ -754,11 +754,6 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 		InvalidateRect(state->wnd, NULL, TRUE);//TODO(fran): dont invalidate everything
 		return 0;
 	} break;
-	case WM_KEYUP:
-	{
-		//TODO(fran): smth to do here?
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_GETTEXT:
 	{
 		LRESULT res;
@@ -805,39 +800,6 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 		}
 		return res;
 	}break;
-	case WM_SYSKEYDOWN://1st msg received after the user presses F10 or Alt+some key
-	{
-		//TODO(fran): notify the parent?
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_SYSKEYUP:
-	{
-		//TODO(fran): notify the parent?
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_IME_NOTIFY:
-	{
-		//Notifies about changes to the IME window
-		//TODO(fran): process this msgs once we manage the ime window
-		u32 command = (u32)wparam;
-
-		//IMN_SETCOMPOSITIONWINDOW IMN_SETSTATUSWINDOWPOS
-		//printf("WM_IME_NOTIFY: wparam = 0x%08x\n", command);
-
-		//lparam = command specific data
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_IME_REQUEST://After Alt+Shift to change the keyboard (and some WM_IMENOTIFY) we receive this msg
-	{
-		//printf("WM_IME_REQUEST: wparam = 0x%08x\n", wparam);
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_INPUTLANGCHANGE://After Alt+Shift to change the keyboard (and some WM_IMENOTIFY) and WM_IME_REQUEST we receive this msg
-	{
-		//wparam = charset of the new locale
-		//lparam = input locale identifier... wtf
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_IME_STARTCOMPOSITION://On japanese keyboard, after we press a key to start writing this is 1st msg received
 	{
 		//doc:Sent immediately before the IME generates the composition string as a result of a keystroke
@@ -846,11 +808,6 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 		EDITONELINE_set_composition_pos(state);
 		EDITONELINE_set_composition_font(state);//TODO(fran): should I place this somewhere else?
 
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
-	case WM_IME_COMPOSITION://On japanese keyboard, after we press a key to start writing this is 2nd msg received
-	{//doc: sent when IME changes composition status cause of keystroke
-		//wparam = DBCS char for latest change to composition string, TODO(fran): find out about DBCS
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
 	case WM_IME_CHAR://WM_CHAR from the IME window, this are generated once the user has pressed enter on the IME window, so more than one char will probably be coming
@@ -864,25 +821,31 @@ LRESULT CALLBACK EditOnelineProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpar
 
 		return 0;//docs dont mention return value so I guess it dont matter
 	} break;
+	case WM_CREATE://3rd msg received
+	case WM_SIZE: //4th, strange, I though this was sent only if you didnt handle windowposchanging (or a similar one)
+		//NOTE: neat, here you resize your render target, if I had one or cared to resize windows' https://docs.microsoft.com/en-us/windows/win32/winmsg/wm-size
+	case WM_MOVE: //5th. Sent on startup after WM_SIZE, although possibly sent by DefWindowProc after I let it process WM_SIZE, not sure
+		//This msg is received _after_ the window was moved //Here you can obtain x and y of your window's client area
+	case WM_SHOWWINDOW: //6th. On startup I received this cause of WS_VISIBLE flag
+		//Sent when window is about to be hidden or shown, doesnt let it clear if we are in charge of that or it's going to happen no matter what we do
+	case WM_DESTROY:
+	case WM_MOUSEMOVE /*WM_MOUSEFIRST*/://When the mouse goes over us this is 3rd msg received
+	case WM_KEYUP:
+	case WM_SYSKEYDOWN://1st msg received after the user presses F10 or Alt+some key //TODO(fran): notify the parent?
+	case WM_SYSKEYUP: //TODO(fran): notify the parent?
+	case WM_IME_NOTIFY: //TODO(fran): process this notification msgs once we manage the ime window
+	case WM_IME_REQUEST://After Alt+Shift to change the keyboard (and some WM_IMENOTIFY) we receive this msg
+	case WM_INPUTLANGCHANGE://After Alt+Shift to change the keyboard (and some WM_IMENOTIFY) and WM_IME_REQUEST we receive this msg
+	case WM_IME_COMPOSITION://On japanese keyboard, after we press a key to start writing this is 2nd msg received
+		//doc: sent when IME changes composition status cause of keystroke
+		//wparam = DBCS char for latest change to composition string, TODO(fran): find out about DBCS
 	case WM_IME_ENDCOMPOSITION://After the chars are sent from the IME window it hides/destroys itself (idk)
-	{
-		//TODO: Handle once we process our own IME
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	//case WM_IME_CONTROL: //NOTE: I feel like this should be received by the wndproc of the IME, I dont think I can get DefWndProc to send it there for me
-	//{
-	//	//Used to manually send some msg to the IME window, in my case I use it so DefWindowProc sends my msg to it IME default wnd
-	//	return DefWindowProc(hwnd, msg, wparam, lparam);
-	//}break;
+		//Used to manually send some msg to the IME window, in my case I use it so DefWindowProc sends my msg to it IME default wnd
 	case WM_WINDOWPOSCHANGING://TODO(fran): do I handle resizing?
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_WINDOWPOSCHANGED://TODO(fran): do I handle resizing?
-	{
-		return DefWindowProc(hwnd, msg, wparam, lparam);
-	} break;
 	case WM_APPCOMMAND://This is triggered, for example, when the user presses one of the media keys (next track, prev, ...) in their keyboard
+	case WM_GETOBJECT:
 	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;

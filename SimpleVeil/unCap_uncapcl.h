@@ -107,7 +107,8 @@ void SetText_app_name(HWND wnd, const TCHAR* new_appname) {
 }
 
 void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
-	state->controls.slider_brightness = CreateWindowExW(0, TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_NOTICKS | TBS_HORZ
+	TrackbarProcState* trackbarprocstate = (TrackbarProcState*)calloc(1, sizeof(TrackbarProcState));
+	state->controls.slider_brightness = CreateWindowExW(WS_EX_COMPOSITED | WS_EX_TRANSPARENT, TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_NOTICKS | TBS_HORZ
 		, 0, 0, 0, 0, state->wnd, (HMENU)SLIDER_BRIGHTNESS, NULL, NULL);
 
 	SendMessage(state->controls.slider_brightness, TBM_SETRANGE, TRUE, (LPARAM)MAKELONG(0, brightness_slider_max));
@@ -115,19 +116,23 @@ void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
 	SendMessage(state->controls.slider_brightness, TBM_SETLINESIZE, 0, (LPARAM)5);
 	SendMessage(state->controls.slider_brightness, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)state->settings->slider_brightness_pos);
 
-	SetWindowSubclass(state->controls.slider_brightness, TrackbarProc, 0, 0);
+	SetWindowSubclass(state->controls.slider_brightness, TrackbarProc, 0, (DWORD_PTR)trackbarprocstate);
+	TRACKBAR_set_brushes(trackbarprocstate,
+		unCap_colors.TrackbarThumb, unCap_colors.TrackbarChannelBk, unCap_colors.TrackbarThumbChannelBk, unCap_colors.TrackbarChannelBorder, unCap_colors.TrackbarThumbChannelBorder,
+		state->controls.slider_brightness);
+	TRACKBAR_set_dimensions(trackbarprocstate, 1, state->controls.slider_brightness);
 
 	state->controls.toggle_button_on_off = CreateWindowExW(WS_EX_COMPOSITED | WS_EX_TRANSPARENT, unCap_wndclass_toggle_button, NULL, WS_VISIBLE | WS_CHILD | WS_TABSTOP
 		, 0, 0, 0, 0, state->wnd, (HMENU)BUTTON_ONOFF, NULL, NULL);
 	UNCAPTGLBTN_set_brushes(state->controls.toggle_button_on_off, TRUE, unCap_colors.Img, unCap_colors.Img, unCap_colors.ToggleBk_On, unCap_colors.ToggleBk_Off, unCap_colors.ToggleBkPush_On, unCap_colors.ToggleBkPush_Off, unCap_colors.ToggleBkMouseOver_On, unCap_colors.ToggleBkMouseOver_Off);
 	UNCAPTGLBTN_set_state_reference(state->controls.toggle_button_on_off, &state->settings->is_veil_on);
 
-	state->controls.edit_hotkey = CreateWindowW(unCap_wndclass_edit_oneline, L"", WS_VISIBLE | WS_CHILD | ES_CENTER
+	state->controls.edit_hotkey = CreateWindowW(unCap_wndclass_edit_oneline, L"", WS_VISIBLE | WS_CHILD | ES_CENTER | ES_ROUNDRECT | ES_ELLIPSIS
 		, 0,0,0,0, state->wnd, (HMENU)EDIT_HOTKEY, NULL, NULL);
 	EDITONELINE_set_brushes(state->controls.edit_hotkey, TRUE, unCap_colors.ControlTxt, unCap_colors.ControlBk, unCap_colors.Img, unCap_colors.ControlTxt_Disabled, unCap_colors.ControlBk_Disabled, unCap_colors.Img_Disabled);
 	HotkeyProcState* hotkeyprocstate = (HotkeyProcState*)calloc(1, sizeof(HotkeyProcState));
 	SetWindowSubclass(state->controls.edit_hotkey, HotkeyProc, 0, (DWORD_PTR)hotkeyprocstate);
-	HOTKEY_set_brushes(hotkeyprocstate, unCap_colors.ControlTxt, unCap_colors.ControlTxt_Disabled, unCap_colors.HotkeyTxt_Accepted, unCap_colors.HotkeyTxt_Rejected);
+	HOTKEY_set_brushes(hotkeyprocstate, unCap_colors.ControlTxt, unCap_colors.ControlTxt_Disabled, unCap_colors.HotkeyTxt_Accepted, unCap_colors.HotkeyTxt_Rejected, state->controls.edit_hotkey);
 	hotkeyprocstate->stored_hk = &state->settings->hotkey;
 	
 	for (auto ctl : state->controls.all)
@@ -327,9 +332,11 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 			SIMPLEVEIL_toggle_wnd_visibility(state);
 			return 0;
 		} break;
-		case BUTTON_ONOFF:
+		case BUTTON_ONOFF: //TODO: when the msg comes from the taskbar it's NOT re-rendering the toogle button
 		{
 			state->settings->is_veil_on = !state->settings->is_veil_on;
+
+			UNCAPTGLBTN_start_animation(UNCAPTGLBTN_get_state(state->controls.toggle_button_on_off)); //TODO: this is a HACK so that the toggle button re-renders when you click on the tray to show/hide the veil
 
 			SIMPLEVEIL_update_veil_wnd(state);
 		} break;
@@ -387,6 +394,7 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 	case WM_NOTIFY:
 	case WM_APPCOMMAND:
 	case WM_MOUSEWHEEL:
+	case WM_CHANGEUISTATE: //maybe this is the way that a control tells its composited/layered parent to rerender itself?
 	{
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;

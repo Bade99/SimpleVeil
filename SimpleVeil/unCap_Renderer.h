@@ -417,6 +417,16 @@ namespace urender {
 		graphics.FillPath(&br, &path);
 	}
 
+	void draw_round_rectangle_outline(HDC dest, RECT r, float radius, HBRUSH color_br, f32 thickness = 1) {
+		Gdiplus::Graphics graphics(dest);
+		SetUpRenderSettings(graphics);
+		auto diameter = radius * 2;
+		Gdiplus::Pen pen(HbrushToGdiplusColor(color_br), thickness);
+		Gdiplus::GraphicsPath path;
+		GetRoundRectPath(&path, r, diameter);
+		graphics.DrawPath(&pen, &path);
+	}
+
 	void draw_ellipse(HDC dest, rect_f32 r, HBRUSH color_br) {
 		Gdiplus::Graphics graphics(dest);
 		SetUpRenderSettings(graphics);
