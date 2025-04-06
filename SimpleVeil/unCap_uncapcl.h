@@ -25,7 +25,12 @@ constexpr int y_pad = 10;
 
 constexpr int brightness_slider_max = 90;
 
-constexpr TCHAR appName[] = _t("SimpleVeil");
+#define APP_NAME "SimpleVeil"
+#define APP_VERSION "1.0.1"
+
+constexpr TCHAR appName[] = TEXT(APP_NAME);
+
+constexpr TCHAR appVersion[] = TEXT(APP_VERSION);
 
 struct unCapClSettings {
 

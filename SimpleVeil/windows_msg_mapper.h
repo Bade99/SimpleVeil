@@ -1088,3 +1088,53 @@ const char* hittestToString(unsigned int /*hittest*/) {
 	return res;
 }
 #endif
+
+#ifdef _SHOWCONSOLE
+#include <map>
+
+static std::map<int, const char*> internetStatusTranslation = {
+{10, "INTERNET_STATUS_RESOLVING_NAME"},
+{11, "INTERNET_STATUS_NAME_RESOLVED"},
+{20, "INTERNET_STATUS_CONNECTING_TO_SERVER"},
+{21, "INTERNET_STATUS_CONNECTED_TO_SERVER"},
+{30, "INTERNET_STATUS_SENDING_REQUEST"},
+{31, "INTERNET_STATUS_REQUEST_SENT"},
+{40, "INTERNET_STATUS_RECEIVING_RESPONSE"},
+{41, "INTERNET_STATUS_RESPONSE_RECEIVED"},
+{42, "INTERNET_STATUS_CTL_RESPONSE_RECEIVED"},
+{43, "INTERNET_STATUS_PREFETCH"},
+{50, "INTERNET_STATUS_CLOSING_CONNECTION"},
+{51, "INTERNET_STATUS_CONNECTION_CLOSED"},
+{60, "INTERNET_STATUS_HANDLE_CREATED"},
+{70, "INTERNET_STATUS_HANDLE_CLOSING"},
+{80, "INTERNET_STATUS_DETECTING_PROXY"},
+{100, "INTERNET_STATUS_REQUEST_COMPLETE"},
+{110, "INTERNET_STATUS_REDIRECT"},
+{120, "INTERNET_STATUS_INTERMEDIATE_RESPONSE"},
+{140, "INTERNET_STATUS_USER_INPUT_REQUIRED"},
+{200, "INTERNET_STATUS_STATE_CHANGE"},
+{320, "INTERNET_STATUS_COOKIE_SENT"},
+{321, "INTERNET_STATUS_COOKIE_RECEIVED"},
+{324, "INTERNET_STATUS_PRIVACY_IMPACTED"},
+{325, "INTERNET_STATUS_P3P_HEADER"},
+{326, "INTERNET_STATUS_P3P_POLICYREF"},
+{327, "INTERNET_STATUS_COOKIE_HISTORY"},
+};
+
+const char* internetStatusToString(unsigned int internetStatus) {
+	const char* res = internetStatusTranslation[internetStatus];
+	if (res == NULL)
+	{
+		static char unkown[32] = "UnknownInternetStatus ";
+		static size_t len = strlen(unkown);
+		sprintf_s(unkown + len, sizeof(unkown) / sizeof(unkown[0]) - len, "%u", internetStatus);
+		res = unkown;
+	}
+	return res;
+}
+#else
+const char* internetStatusToString(unsigned int /*hittest*/) {
+	const char* res = "UnknownInternetStatus";
+	return res;
+}
+#endif
