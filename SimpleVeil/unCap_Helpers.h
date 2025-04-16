@@ -1,6 +1,8 @@
 #pragma once
 #include <Windows.h>
 #include <shellapi.h>
+#include <ShellScalingApi.h>
+
 #include "unCap_Platform.h"
 
 #ifdef _DEBUG
@@ -368,7 +370,7 @@ static BOOL SetMenuItemString(HMENU hmenu, UINT item, BOOL fByPositon, const TCH
 /// Check to see if animation has been disabled in Windows
 /// </summary>
 /// <returns></returns>
-inline BOOL GetDoAnimateMinimize(VOID)
+static BOOL GetDoAnimateMinimize(VOID)
 {//Thanks to: https://www.codeproject.com/Articles/735/Minimizing-windows-to-the-System-Tray
 	ANIMATIONINFO ai;
 
@@ -384,7 +386,7 @@ inline BOOL GetDoAnimateMinimize(VOID)
 /// <para>right hand corner of the screen</para>
 /// </summary>
 /// <param name="lpTrayRect"></param>
-inline void GetTrayWndRect(LPRECT lpTrayRect)
+static void GetTrayWndRect(LPRECT lpTrayRect)
 {//Thanks to: https://www.codeproject.com/Articles/735/Minimizing-windows-to-the-System-Tray
 	// First, we'll use a quick hack method. We know that the taskbar is a window
 	// of class Shell_TrayWnd, and the status tray is a child of this of class
@@ -476,7 +478,7 @@ inline void GetTrayWndRect(LPRECT lpTrayRect)
 #undef DEFAULT_RECT_HEIGHT
 }
 
-inline i32 win32_get_refresh_rate_hz(HWND wnd) {
+static i32 win32_get_refresh_rate_hz(HWND wnd) {
 	//TODO(fran): this may be simpler with GetDeviceCaps
 	int res = 60;
 	HMONITOR mon = MonitorFromWindow(wnd, MONITOR_DEFAULTTONEAREST); //TODO(fran): should it directly receive the hmonitor?
@@ -495,137 +497,13 @@ inline i32 win32_get_refresh_rate_hz(HWND wnd) {
 	return res;
 }
 
-/// <summary>
-/// Animates a window going to the tray and hides it
-/// <para>Does not check whether the window is already minimized</para>
-/// <para>The window position is left right where it started, so you can later use GetWindowRect to determine the "to" in TrayToWindow</para>
-/// </summary>
-/// <param name="from">Place from where the window will start moving, ej its top-left corner</param>
-/// <param name="to">Window destination, aka the tray's top left corner, or wherever you want</param>
-/// <param name="milliseconds">Duration of the animation</param>
-/// <returns></returns>
-inline void WindowToTray(HWND hWnd, POINT from, POINT to, int milliseconds) {
-	float frametime = (1.f / win32_get_refresh_rate_hz(hWnd)) * 1000.f;
-	float frames = milliseconds / frametime;
-	RECT rc = { from.x,from.y,to.x,to.y };
-	SIZE offset;
-	offset.cx = (LONG)(RECTWIDTH(rc) / frames);//TODO(fran): should start faster and end slower, NOT be constant
-	offset.cy = (LONG)(RECTHEIGHT(rc) / frames);
-	POINT sign;
-	sign.x = (from.x >= to.x) ? -1 : 1;
-	sign.y = (from.y >= to.y) ? -1 : 1;
-	float alphaChange = 100 / frames;
-
-
-	//AnimateWindow(hWnd, milliseconds, AW_BLEND | AW_HIDE); //Not even async support!
-
-	// Set WS_EX_LAYERED on this window 
-	SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED);
-
-	for (int i = 1; i <= frames; i++) {
-		SetLayeredWindowAttributes(hWnd, NULL, (BYTE)((255 * (100 - alphaChange * i)) / 100), LWA_ALPHA);
-		SetWindowPos(hWnd, NULL, from.x + sign.x * offset.cx * i, from.y + sign.y * offset.cy * i, 0, 0, SWP_NOZORDER | SWP_NOREDRAW | SWP_NOSIZE);
-		Sleep((int)floor(frametime));//good enough
-	}
-	SetLayeredWindowAttributes(hWnd, 0, 0, LWA_ALPHA);
-	SetWindowPos(hWnd, NULL, from.x, from.y, 0, 0, SWP_NOZORDER | SWP_NOREDRAW | SWP_NOSIZE);
-	ShowWindow(hWnd, SW_HIDE);
-	SetLayeredWindowAttributes(hWnd, 0, 255, LWA_ALPHA);
-	SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) ^ WS_EX_LAYERED);
-
-}
-
-//TODO(fran): combine this two, or at least parts of them
-/// <summary>
-/// Animates a window coming out of the tray and shows it
-/// </summary>
-/// <param name="hWnd"></param>
-/// <param name="from">Place from where the window will start moving, ej its top-left corner</param>
-/// <param name="to">Window destination, aka the top left corner of where the window was before minimizing, or wherever you want</param>
-/// <param name="milliseconds">Duration of the animation</param>
-inline void TrayToWindow(HWND hWnd, POINT from, POINT to, int milliseconds) {
-	float frametime = (1.f / win32_get_refresh_rate_hz(hWnd)) * 1000.f;
-	float frames = milliseconds / frametime;
-	RECT rc = { from.x,from.y,to.x,to.y };
-	SIZE offset;
-	offset.cx = (LONG)(RECTWIDTH(rc) / frames); //TODO(fran): should start faster and end slower, NOT be constant
-	offset.cy = (LONG)(RECTHEIGHT(rc) / frames);
-	POINT sign;
-	sign.x = (from.x >= to.x) ? -1 : 1;
-	sign.y = (from.y >= to.y) ? -1 : 1;
-	float alphaChange = 100 / frames;
-
-	//We put the window at 0 alpha then we make the window visible 
-	SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED);
-	SetLayeredWindowAttributes(hWnd, 0, 0, LWA_ALPHA);
-	ShowWindow(hWnd, SW_SHOW);
-	SendMessage(hWnd, WM_PAINT, 0, 0); EnumChildWindows(hWnd, [](HWND wnd, LPARAM lparam) {SendMessage(wnd, WM_PAINT, 0, 0); return TRUE; }, 0); //A little cheating, we force painting so everything looks normal when bringing the unloaded windows from the tray //TODO(fran): find a better way
-	for (int i = 1; i <= frames; i++) {
-		SetLayeredWindowAttributes(hWnd, NULL, (BYTE)((255 * (alphaChange * i)) / 100), LWA_ALPHA);
-		SetWindowPos(hWnd, NULL, from.x + sign.x * offset.cx * i, from.y + sign.y * offset.cy * i, 0, 0, SWP_NOZORDER | SWP_NOREDRAW | SWP_NOSIZE);
-		Sleep((int)floor(frametime));//good enough
-	}
-	SetLayeredWindowAttributes(hWnd, 0, 255, LWA_ALPHA); //just to make sure
-	SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) ^ WS_EX_LAYERED);
-	SetWindowPos(hWnd, NULL, to.x, to.y, 0, 0, SWP_NOZORDER | SWP_NOREDRAW | SWP_NOSIZE);//just to make sure, dont tell it to redraw cause it takes a long time to do it and looks bad
-
-	SetActiveWindow(hWnd);
-	SetForegroundWindow(hWnd);
-}
-
-/// <summary>
-/// Minimizes a window and creates an animation to make it look like it goes to the tray
-/// </summary>
-/// <param name="hWnd"></param>
-inline void MinimizeWndToTray(HWND hWnd)
-{//Thanks to: https://www.codeproject.com/Articles/735/Minimizing-windows-to-the-System-Tray
-	if (GetDoAnimateMinimize())
-	{
-		RECT rcFrom, rcTo;
-
-		// Get the rect of the window. It is safe to use the rect of the whole
-		// window - DrawAnimatedRects will only draw the caption
-		GetWindowRect(hWnd, &rcFrom);
-		GetTrayWndRect(&rcTo);
-
-		WindowToTray(hWnd, { rcFrom.left,rcFrom.top }, { rcTo.left,rcTo.top }, 200);
-	}
-	else ShowWindow(hWnd, SW_HIDE);// Just hide the window
-}
-
-/// <summary>
-/// Restores a window and makes it look like it comes out of the tray 
-/// <para>and makes it back to where it was before minimizing</para>
-/// </summary>
-/// <param name="hWnd"></param>
-inline void RestoreWndFromTray(HWND hWnd)
-{//Thanks to: https://www.codeproject.com/Articles/735/Minimizing-windows-to-the-System-Tray
-	if (GetDoAnimateMinimize())
-	{
-		// Get the rect of the tray and the window. Note that the window rect
-		// is still valid even though the window is hidden
-		RECT rcFrom, rcTo;
-		GetTrayWndRect(&rcFrom);
-		GetWindowRect(hWnd, &rcTo);
-
-		// Get the system to draw our animation for us
-		TrayToWindow(hWnd, { rcFrom.left,rcFrom.top }, { rcTo.left,rcTo.top }, 200);
-	}
-	else {
-		// Show the window, and make sure we're the foreground window
-		ShowWindow(hWnd, SW_SHOW);
-		SetActiveWindow(hWnd);
-		SetForegroundWindow(hWnd);
-	}
-}
-
-inline void AskForRepaint(HWND wnd) {
+static void AskForRepaint(HWND wnd) {
 	InvalidateRect(wnd, NULL, TRUE);
 	//RedrawWindow(wnd, NULL, NULL, RDW_INVALIDATE);
 }
 
 //WM_SETTEXT has an insane default implementation, where, unexplicably, it DOES PAINTING. This allows you to handle set text normally, without having it paint over your stuff.
-inline LRESULT HandleSetText(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+static LRESULT HandleSetText(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	LONG_PTR  dwStyle = GetWindowLongPtr(wnd, GWL_STYLE);
 	SetWindowLongPtr(wnd, GWL_STYLE, dwStyle & ~WS_VISIBLE);
 	LRESULT ret = DefWindowProc(wnd, msg, wparam, lparam);
@@ -635,7 +513,7 @@ inline LRESULT HandleSetText(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 }
 
 //HRGN
-inline HRGN GetOldRegion(HDC dc) {
+static HRGN GetOldRegion(HDC dc) {
 	HRGN oldRegion = CreateRectRgn(0, 0, 0, 0); 
 	if (GetClipRgn(dc, oldRegion) != 1) { 
 		DeleteObject(oldRegion);
@@ -644,13 +522,48 @@ inline HRGN GetOldRegion(HDC dc) {
 	return oldRegion;
 }
 
-inline void RestoreOldRegion(HDC dc, HRGN oldRegion) {
+static void RestoreOldRegion(HDC dc, HRGN oldRegion) {
 	SelectClipRgn(dc, oldRegion);
 	if (oldRegion != NULL) DeleteObject(oldRegion);
 }
 
-inline HRGN CreateRoundRectRgnIndirect(RECT rc, f32 radius) {
+static HRGN CreateRoundRectRgnIndirect(RECT rc, f32 radius) {
 	auto r = rect_f32::from_RECT(rc);
 	auto diameter = radius * 2;
 	return CreateRoundRectRgn(r.left, r.top, r.right(), r.bottom(), diameter, diameter);
+}
+
+//DPI
+static f32 GetScalingForMonitor(HMONITOR monitor) {
+	//stolen from: https://github.com/ocornut/imgui/blob/master/backends/imgui_impl_win32.cpp
+	f32 res;
+	UINT xdpi = 96, ydpi = 96;
+
+	static HMODULE WinSHCore = LoadLibraryW(L"shcore.dll");
+	if (WinSHCore)
+	{
+		typedef HRESULT STDAPICALLTYPE get_dpi_for_monitor(HMONITOR, MONITOR_DPI_TYPE, UINT*, UINT*); //GetDpiForMonitor
+		static get_dpi_for_monitor* GetDpiForMonitor = (get_dpi_for_monitor*)GetProcAddress(WinSHCore, "GetDpiForMonitor");
+		if (GetDpiForMonitor)
+		{
+			GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &xdpi, &ydpi);
+			res = xdpi / 96.0f;
+		}
+		else goto last_resort;
+	}
+	else
+	{
+		//TODO(fran): see if there are better alternatives (specifically for WXP & W7)
+	last_resort:
+		HDC dc = GetDC(HWND_DESKTOP); defer{ ReleaseDC(HWND_DESKTOP, dc); };
+		xdpi = GetDeviceCaps(dc, LOGPIXELSX);
+		res = xdpi / 96.0f;
+	}
+	return res;
+}
+
+static f32 GetScalingForMonitorFromWindow(HWND wnd) {
+	HMONITOR monitor = MonitorFromWindow(wnd, MONITOR_DEFAULTTONEAREST);
+	f32 res = GetScalingForMonitor(monitor);
+	return res;
 }

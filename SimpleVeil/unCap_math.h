@@ -103,7 +103,7 @@ static f32 length(v2 v) {
 	return res;
 }
 
-f32 lerp(f32 n1, f32 t, f32 n2) {
+static f32 lerp(f32 n1, f32 t, f32 n2) {
 	//NOTE: interesting that https://en.wikipedia.org/wiki/Linear_interpolation mentions this is the Precise method
 	return (1.f - t) * n1 + t * n2;
 }

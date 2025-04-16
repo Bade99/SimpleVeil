@@ -87,6 +87,9 @@
     <ClInclude Include="unCap_toggle_button.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="unCap_animation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SimpleVeil.cpp">

@@ -160,6 +160,7 @@
     <ClInclude Include="SIMPLEVEIL_trackbar.h" />
     <ClInclude Include="SimpleVeil_veil.h" />
     <ClInclude Include="TRAY_HANDLER.h" />
+    <ClInclude Include="unCap_animation.h" />
     <ClInclude Include="unCap_edit_oneline.h" />
     <ClInclude Include="unCap_Helpers.h" />
     <ClInclude Include="unCap_math.h" />

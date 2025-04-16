@@ -21,6 +21,7 @@
 #include <Commctrl.h>
 #include <wininet.h>
 #include "unCap_Helpers.h"
+#include "unCap_animation.h"
 #include "unCap_Global.h"
 #include "LANGUAGE_MANAGER.h"
 #include "unCap_uncapnc.h"
@@ -411,7 +412,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     }
     defer{ ReleaseMutex(single_instance_mutex);	CloseHandle(single_instance_mutex); };
 
+#ifndef _DEBUG
     auto internet_context = check_for_updates(); defer{ internet_context->close_handles(); }; //TODO: allow the user to configure the 'check for updates' frequency: on app startup, every day, every week, every month, off
+#endif
 
     urender::init(); defer{ urender::uninit(); };
 
