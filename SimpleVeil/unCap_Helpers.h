@@ -4,6 +4,7 @@
 #include <ShellScalingApi.h>
 
 #include "unCap_Platform.h"
+#include "fmt.h"
 
 #ifdef _DEBUG
 #define UNCAP_ASSERTIONS
@@ -278,8 +279,28 @@ struct rect_f32 {
 	f32 bottom() const { return top + h; }
 	f32 center_x() const { return left + w / 2.f; }
 	f32 center_y() const { return top + h / 2.f; }
-	void cut_left(f32 w) { this->left += w; this->w -= w; }
-	void cut_right(f32 w) { this->w -= w; }
+	rect_f32 cut_left(f32 w) {
+		rect_f32 cut_section{ this->left, this->top, w, this->h };
+		this->left += w;
+		this->w -= w;
+		return cut_section;
+	}
+	rect_f32 cut_right(f32 w) {
+		this->w -= w;
+		rect_f32 cut_section{ this->left + this->w, this->top, w, this->h };
+		return cut_section;
+	}
+	rect_f32 cut_top(f32 h) {
+		rect_f32 cut_section{ this->left, this->top, this->w, h };
+		this->top += h;
+		this->h -= h;
+		return cut_section;
+	}
+	rect_f32 cut_bottom(f32 h) {
+		this->h -= h;
+		rect_f32 cut_section{ this->left, this->top + this->h, this->w, h };
+		return cut_section;
+	}
 	void inflate(f32 dx, f32 dy) {
 		f32 half_dx = dx / 2.f;
 		f32 half_dy = dy / 2.f;
@@ -364,6 +385,12 @@ static BOOL SetMenuItemString(HMENU hmenu, UINT item, BOOL fByPositon, const TCH
 	menu_setter.dwTypeData = const_cast<TCHAR*>(str);
 	BOOL res = SetMenuItemInfoW(hmenu, item, fByPositon, &menu_setter);
 	return res;
+}
+
+//HWND
+
+static void MoveWindow(HWND wnd, rect_f32 r, bool repaint = false) {
+	MoveWindow(wnd, r.left, r.top, r.w, r.h, repaint);
 }
 
 /// <summary>
@@ -566,4 +593,63 @@ static f32 GetScalingForMonitorFromWindow(HWND wnd) {
 	HMONITOR monitor = MonitorFromWindow(wnd, MONITOR_DEFAULTTONEAREST);
 	f32 res = GetScalingForMonitor(monitor);
 	return res;
+}
+
+//Unicode
+#ifdef UNICODE
+static str convert_utf8_to_utf16(const utf8* s, int sz /*bytes, not including null terminator*/) {
+	str res = L"";
+	int sz_char = MultiByteToWideChar(CP_UTF8, 0, (LPCCH)s, sz, 0, 0);//NOTE: pre windows vista this may need a change
+	if (sz_char) {
+		try {
+			res.resize(sz_char); //this is wasteful since it writes zeroes til it reaches sz_char
+			MultiByteToWideChar(CP_UTF8, 0, (LPCCH)s, sz, res.data(), sz_char);
+		} catch (...) {}
+	}
+	return res;
+}
+static std::string convert_utf16_to_utf8(const utf16* s, int sz /*chars, not including null terminator*/) {
+	std::string res = "";
+	int sz_char = WideCharToMultiByte(CP_UTF8, 0, s, sz, 0, 0, 0, 0);//NOTE: pre windows vista this may need a change
+	if (sz_char) {
+		try {
+			res.resize(sz_char); //this is wasteful since it writes zeroes til it reaches sz_char
+			WideCharToMultiByte(CP_UTF8, 0, s, sz, res.data(), sz_char, 0, 0);
+		}
+		catch (...) {}
+	}
+	return res;
+}
+static str convert_utf8_to_utf16(std::string s) {
+	return convert_utf8_to_utf16(s.c_str(), s.length());
+}
+static std::string convert_utf16_to_utf8(str s) {
+	return convert_utf16_to_utf8(s.c_str(), s.length());
+}
+#else
+static str convert_utf8_to_utf16(const utf8* s, int sz /*bytes*/) {
+	str res(s, sz);
+	return res;
+}
+static str convert_utf8_to_utf16(std::string s) { return s; }
+#endif
+
+//Bytes
+static str formatBytes(u64 bytes) {
+	f64 number = bytes;
+	const cstr* units[] = { TEXT("B"), TEXT("KB"), TEXT("MB"), TEXT("GB"), TEXT("TB"), TEXT("PB"), TEXT("EB") };
+	i32 unit = 0;
+	f64 val = number;
+	for (; (val = val / 1024) >= 1; unit++) number = val;
+	return _f(floor(number) == number ? TEXT("{:.0f} {}") : TEXT("{:.2f} {}"), number, units[unit]);
+}
+
+//Bytes
+static std::string formatBytesA(u64 bytes) {
+	f64 number = bytes;
+	const char* units[] = { "B", "KB", "MB", "GB", "TB", "PB", "EB" };
+	i32 unit = 0;
+	f64 val = number;
+	for (; (val = val / 1024) >= 1; unit++) number = val;
+	return _f(floor(number) == number ? "{:.0f} {}" : "{:.2f} {}", number, units[unit]);
 }

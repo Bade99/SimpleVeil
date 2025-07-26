@@ -7,12 +7,21 @@
 #pragma warning(disable : 4505) //unreferenced local function has been removed
 #pragma warning(disable : 4702) //unreachable code
 
+#ifndef UNICODE
+#error This application can only be built for unicode (utf16) versions of Windows
+#endif
+
 #ifdef _DEBUG
-//TODO(fran): change to logging
 #define _SHOWCONSOLE
+#define _AUTOUPDATER
+#define _AUTOUPDATER_TEST
 #else
 //#define _SHOWCONSOLE
+#define _AUTOUPDATER
 #endif
+
+static const wchar_t* RICHEDIT_CLASS_VERSION = nullptr;
+static bool richedit_support = false;
 
 #include "resource.h"
 #include "targetver.h"
@@ -20,11 +29,13 @@
 #include <windows.h>
 #include <Commctrl.h>
 #include <wininet.h>
+#include "fmt.h"
 #include "unCap_Helpers.h"
 #include "unCap_animation.h"
 #include "unCap_Global.h"
 #include "LANGUAGE_MANAGER.h"
 #include "unCap_uncapnc.h"
+#include "unCap_updater.h"
 #include "unCap_button.h"
 #include "unCap_toggle_button.h"
 #include "unCap_Reflection.h"
@@ -59,13 +70,13 @@ i32 n_tabs = 0;//Needed for serialization
 UNCAP_COLORS unCap_colors{ 0 };
 UNCAP_FONTS unCap_fonts{ 0 };
 
-HWND uncapnc;
+HWND uncapnc, updaternc;
 
 //The dc is passed to EnumFontFamiliesEx, you can just pass the desktop dc for example //TODO(fran): can we guarantee which dc we use doesnt matter? in that case dont ask the user for a dc and do it myself
-BOOL hasFontFace(HDC dc, const TCHAR* facename) {
-    int res = EnumFontFamiliesEx(dc/*You have to put some dc,not NULL*/, NULL
+BOOL hasFontFace(HDC dc, const utf16* facename) {
+    int res = EnumFontFamiliesExW(dc/*You have to put some dc,not NULL*/, NULL
         , [](const LOGFONT* lpelfe, const TEXTMETRIC* /*lpntme*/, DWORD /*FontType*/, LPARAM lparam)->int {
-            if (!StrCmpI((TCHAR*)lparam, lpelfe->lfFaceName)) {//Non case-sensitive comparison
+            if (!StrCmpIW((utf16*)lparam, lpelfe->lfFaceName)) {//Non case-sensitive comparison
                 return 0;
             }
             return 1;
@@ -90,12 +101,12 @@ str GetFontFaceName() {
 
     HDC dc = GetDC(GetDesktopWindow()); defer{ ReleaseDC(GetDesktopWindow(),dc); }; //You can use any hdc, but not NULL
     std::vector<str> fontnames;
-    EnumFontFamiliesEx(dc, NULL
+    EnumFontFamiliesExW(dc, NULL
         , [](const LOGFONT* lpelfe, const TEXTMETRIC* /*lpntme*/, DWORD /*FontType*/, LPARAM lParam)->int {((std::vector<str>*)lParam)->push_back(lpelfe->lfFaceName); return TRUE; }
     , (LPARAM)&fontnames, NULL);
 
-    const TCHAR* requested_fontname[] = { TEXT("Segoe UI"), TEXT("Arial Unicode MS"), TEXT("Microsoft YaHei"), TEXT("Microsoft YaHei UI")
-                                        , TEXT("Microsoft JhengHei"), TEXT("Microsoft JhengHei UI") };
+    const utf16* requested_fontname[] = { L"Segoe UI", L"Arial Unicode MS", L"Microsoft YaHei", L"Microsoft YaHei UI"
+                                        , L"Microsoft JhengHei", L"Microsoft JhengHei UI" };
 
     for (int i = 0; i < ARRAYSIZE(requested_fontname); i++)
         if (std::any_of(fontnames.begin(), fontnames.end(), [f = requested_fontname[i]](str s) {return !s.compare(f); })) return requested_fontname[i];
@@ -107,15 +118,15 @@ void ShowFormattedLastError(DWORD dw = GetLastError())
 {
     LPCTSTR lpMsgBuf;
 
-    auto title = _t("Error");
-    auto error_code = str(_t("\nError code: ")) + to_str(dw);
+    auto title = L"Error";
+    auto error_code = str(L"\nError code: ") + to_str(dw);
 
-    if (FormatMessage(
+    if (FormatMessageW(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_HMODULE | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        GetModuleHandle(_t("wininet.dll")), dw, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lpMsgBuf, 0, NULL) == 0)
-        MessageBox(NULL, (str(_t("FormatMessage failed")) + error_code).c_str(), title, MB_OK);
+        GetModuleHandleW(L"wininet.dll"), dw, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lpMsgBuf, 0, NULL) == 0)
+        MessageBoxW(NULL, (str(L"FormatMessage failed") + error_code).c_str(), title, MB_OK);
     else {
-        MessageBox(NULL, (str(lpMsgBuf) + error_code).c_str(), title, MB_OK);
+        MessageBoxW(NULL, (str(lpMsgBuf) + error_code).c_str(), title, MB_OK);
         LocalFree((LPVOID)lpMsgBuf);
     }
 }
@@ -124,11 +135,11 @@ void ShowFormattedInternetLastResponseInfo()
 {
     TCHAR internet_buffer[1024 * 4];
     DWORD error, buflen = ARRAYSIZE(internet_buffer);
-    auto res = InternetGetLastResponseInfo(&error, internet_buffer, &buflen);
+    auto res = InternetGetLastResponseInfoW(&error, internet_buffer, &buflen);
 
     if (res) {
         printf("ShowFormattedInternetLastResponseInfo Error Code: %d\n", error);
-        MessageBox(NULL, internet_buffer, TEXT("Error"), MB_OK);
+        MessageBoxW(NULL, internet_buffer, TEXT("Error"), MB_OK);
     }
     else
         ShowFormattedLastError();
@@ -167,17 +178,17 @@ public:
     virtual HRESULT STDMETHODCALLTYPE OnLowResource(DWORD reserved) { return S_OK; }
     virtual HRESULT STDMETHODCALLTYPE OnStopBinding(HRESULT hresult, LPCWSTR szError) { return E_NOTIMPL; }
     virtual HRESULT STDMETHODCALLTYPE GetBindInfo(DWORD* grfBINDF, BINDINFO* pbindinfo) { return E_NOTIMPL; }
-    virtual HRESULT STDMETHODCALLTYPE OnDataAvailable(DWORD grfBSCF, DWORD dwSize, FORMATETC* pformatetc, STGMEDIUM* pstgmed) {
-        return E_NOTIMPL;
-    }
+    virtual HRESULT STDMETHODCALLTYPE OnDataAvailable(DWORD grfBSCF, DWORD dwSize, FORMATETC* pformatetc, STGMEDIUM* pstgmed) { return E_NOTIMPL; }
     virtual HRESULT STDMETHODCALLTYPE OnObjectAvailable(REFIID riid, IUnknown* punk) { return E_NOTIMPL; }
 
     virtual HRESULT __stdcall OnProgress(ULONG ulProgress, ULONG ulProgressMax, ULONG ulStatusCode, LPCWSTR szStatusText)
     {
         this->downloaded_bytes = ulProgress;
         this->filesize_bytes = ulProgressMax;
-        printf(_f("{} of {}", this->downloaded_bytes, this->filesize_bytes).c_str());
-        if (szStatusText) wprintf(L" %s\n", szStatusText);
+
+        auto updater_state = updater::get_state(UNCAPNC_get_state(updaternc)->client);
+
+        updater::set_download_progress(updater_state, this->downloaded_bytes, this->filesize_bytes);
         return S_OK;
     }
 
@@ -232,7 +243,7 @@ void InternetStatusCallback(HINTERNET hInternet, DWORD_PTR dwContext, DWORD dwIn
             DWORD buf_sz = sizeof(content_length_bytes);
             DWORD header_index = 0;
 
-            auto querynfo_res = HttpQueryInfo(hInternet, HTTP_QUERY_CONTENT_LENGTH | HTTP_QUERY_FLAG_NUMBER, &content_length_bytes, &buf_sz, &header_index);
+            auto querynfo_res = HttpQueryInfoW(hInternet, HTTP_QUERY_CONTENT_LENGTH | HTTP_QUERY_FLAG_NUMBER, &content_length_bytes, &buf_sz, &header_index);
             if (!querynfo_res) //TODO: if we get the content length we should be able to do only one call to InternetReadFile and exit without having to do the additional copy
                 content_length_bytes = 1024;
 
@@ -261,55 +272,75 @@ void InternetStatusCallback(HINTERNET hInternet, DWORD_PTR dwContext, DWORD dwIn
                     auto new_version = get_to_first_number(release.tag_name);
                     if (release.assets.size() >= 1 && release.assets[0].content_type == "application/x-msdownload" && !release.draft && !release.prerelease && new_version > old_version) { //TODO: better comparison function, the object is formed like so XXX.XXX.XXX, a simple > is not enough for cases like 1.14.0 > 1.2.0
                         auto& asset = release.assets[0];
-                        auto ret = MessageBoxA(NULL, //TODO: should I pass my hwnd so it stops it?
-                            _f("There's a new version of {} available!\nWould you like to update?\n\n{}\n\nDownload size: {} KB", APP_NAME, release.body, asset.size / 1024).c_str(), //TODO: unicode support, the changelog could contain unicode characters
-                            _f("Update from {} to {}", old_version, new_version).c_str(),
-                            MB_YESNO | MB_ICONINFORMATION);
-                        if (ret == IDYES) {
-                            auto new_version_download_url = asset.browser_download_url;
-                            auto new_name = cleanup_filename(std::string(asset.name));
+                        auto title = convert_utf8_to_utf16(_f("Update from {} to {}", old_version, new_version));
+                        auto description = _f("There's a new version of {} available!\nWould you like to update to {}?\n\n{}\n\nDownload size: {}", APP_NAME, new_version, release.body, formatBytesA(asset.size));
+                        ShowWindow(updaternc, SW_SHOW);
+                        auto updater_state = updater::get_state(UNCAPNC_get_state(updaternc)->client);
+                        updater::set_title(updater_state, title.c_str());
+                        updater::set_content(updater_state, description.c_str());
 
+                        struct download_info { std::string browser_download_url, name; };
+                        auto asset_data = new download_info{asset.browser_download_url, asset.name};
+                        updater::set_user_extra(updater_state, asset_data);
 
-                            char exe_full_path[1024]; auto ret = GetModuleFileNameA(nullptr, exe_full_path, ARRAYSIZE(exe_full_path));
-                            if (!ret || (ret == ARRAYSIZE(exe_full_path) && GetLastError() == ERROR_INSUFFICIENT_BUFFER)) return; //TODO: error filename is too long
-                            //TODO remove filename from filepath and add a random filename, then remove the old simpleveil and rename the new file to new_name
-                            
-                            auto path = std::string_view(exe_full_path); auto last_slash = path.find_last_of("/\\"); last_slash = last_slash != std::string_view::npos ? last_slash + 1 : last_slash; path = path.substr(0, last_slash);
-                            auto download_full_path = std::string(path) + "VEIL.tmp";
-                            //GetTempFileNameA(full_path.c_str(), "VEIL", 0, )
-                            auto res = URLDownloadToFileA(nullptr, new_version_download_url.c_str(), download_full_path.c_str(), 0, &download_callback);
-                            if (res == S_OK && download_callback.downloaded_bytes && download_callback.filesize_bytes && download_callback.downloaded_bytes == download_callback.filesize_bytes) {
-                                STARTUPINFOA info = { sizeof(info) };
-                                info.lpTitle = (LPSTR)"SimpleVeil Updater";
-                                PROCESS_INFORMATION processInfo;
-                                auto new_file_full_path = std::string(path) + new_name;
+                        updater::set_on_cancel(updater_state, [](updater::ProcState* state, void* user_extra) {
+                            delete (download_info*)user_extra;
+                            DestroyWindow(state->nc_parent);
+                        });
+                        updater::set_on_confirm(updater_state, [](updater::ProcState* state, void* user_extra) {
+                            updater::set_downloading(state);
+                            static const auto download_and_install = [](void* user_extra) -> DWORD {
+                                auto asset_data = (download_info*)user_extra; defer{ delete asset_data; };
+                                auto new_version_download_url = asset_data->browser_download_url;
+                                //auto new_version_download_url = std::string("http://ipv4.download.thinkbroadband.com/5MB.zip");
+                                auto new_name = cleanup_filename(asset_data->name);
 
-                                //TODO: if new_name is different from the current name then we should update the shortcut address that was used to launch the app
-                                //  To find the shortcut you can use GetStartupInfo() and the .lnk file path is at lpTitle https://stackoverflow.com/questions/6825869/finding-the-shortcut-a-windows-program-was-invoked-from
-                                
-                                auto command = _f("cmd /c ping localhost -n 3 > nul & del \"{}\" & move /y \"{}\" \"{}\" & start \"\" /b \"{}\" & exit", exe_full_path, download_full_path, new_file_full_path, new_file_full_path);
-                                if (uncapnc && CreateProcessA(nullptr,
-                                        (LPSTR)command.c_str(), 
-                                        nullptr, 
-                                        nullptr, 
-                                        false, 
+                                char exe_full_path[1024]; auto ret = GetModuleFileNameA(nullptr, exe_full_path, ARRAYSIZE(exe_full_path));
+                                if (!ret || (ret == ARRAYSIZE(exe_full_path) && GetLastError() == ERROR_INSUFFICIENT_BUFFER)) return 1; //TODO: error filename is too long
+                                //TODO remove filename from filepath and add a random filename, then remove the old simpleveil and rename the new file to new_name
+
+                                auto path = std::string_view(exe_full_path); auto last_slash = path.find_last_of("/\\"); last_slash = last_slash != std::string_view::npos ? last_slash + 1 : last_slash; path = path.substr(0, last_slash);
+                                auto download_full_path = std::string(path) + "VEIL.tmp";
+                                //GetTempFileNameA(full_path.c_str(), "VEIL", 0, )
+
+                                auto res = URLDownloadToFileA(nullptr, new_version_download_url.c_str(), download_full_path.c_str(), 0, &download_callback);
+                                if (res == S_OK && download_callback.downloaded_bytes && download_callback.filesize_bytes && download_callback.downloaded_bytes == download_callback.filesize_bytes) {
+                                    //return 0;
+                                    STARTUPINFOA info = { sizeof(info) };
+                                    info.lpTitle = (LPSTR)"SimpleVeil Updater";
+                                    PROCESS_INFORMATION processInfo;
+                                    auto new_file_full_path = std::string(path) + new_name;
+
+                                    //TODO: if new_name is different from the current name then we should update the shortcut address that was used to launch the app
+                                    //  To find the shortcut you can use GetStartupInfo() and the .lnk file path is at lpTitle https://stackoverflow.com/questions/6825869/finding-the-shortcut-a-windows-program-was-invoked-from
+
+                                    auto command = _f("cmd /c ping localhost -n 3 > nul & del \"{}\" & move /y \"{}\" \"{}\" & start \"\" /b \"{}\" & exit", exe_full_path, download_full_path, new_file_full_path, new_file_full_path);
+                                    if (uncapnc && CreateProcessA(nullptr,
+                                        (LPSTR)command.c_str(),
+                                        nullptr,
+                                        nullptr,
+                                        false,
                                         CREATE_NEW_CONSOLE, //TODO: we can use DETACHED_PROCESS if we wanted the console to stay hidden
-                                        nullptr, 
-                                        nullptr, 
-                                        &info, 
+                                        nullptr,
+                                        nullptr,
+                                        &info,
                                         &processInfo)) {
-                                    CloseHandle(processInfo.hProcess);
-                                    CloseHandle(processInfo.hThread);
-                                    PostMessage(uncapnc, WM_COMMAND, (WPARAM)MAKELONG(UNCAPNC_CLOSE, 0), 0); //TODO: this does not guarantee that we exit the program, a more robust, if harsh, solution may actually be to force close the process
+                                        CloseHandle(processInfo.hProcess);
+                                        CloseHandle(processInfo.hThread);
+                                        PostMessage(uncapnc, WM_COMMAND, (WPARAM)MAKELONG(UNCAPNC_CLOSE, 0), 0); //TODO: this does not guarantee that we exit the program, a more robust, if harsh, solution may actually be to force close the process
+                                    }
+                                    else {
+                                        MessageBoxA(NULL,
+                                            "Update installation failed, please try again",
+                                            "Update Installation Failed",
+                                            MB_OK | MB_ICONERROR);
+                                    }
                                 }
-                                else {
-                                    MessageBoxA(NULL,
-                                        "Update instalation failed, please try again",
-                                        "Update Instalation Failed", 
-                                        MB_OK | MB_ICONERROR);
-                                }
-                            }
-                        }
+                                return 0;
+                            };
+
+                            CreateThread(nullptr, 0, download_and_install, user_extra, 0, nullptr);
+                        });
                     }
                 }
                 catch (...){
@@ -343,39 +374,55 @@ _internet_context* check_for_updates() {
         internet_context.close_handles();
     };
 
-    HINTERNET internet = InternetOpen((str(appName) + _t("/") + appVersion).c_str(), INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, INTERNET_FLAG_ASYNC);
+    HINTERNET internet = InternetOpenW((str(appName) + L"/" + appVersion).c_str(), INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, INTERNET_FLAG_ASYNC);
     internet_context.internet = internet;
     if (!internet) {
         on_failure();
         return &internet_context;
     }
 
-    HINTERNET internet_session = InternetConnect(internet, _t("api.github.com"), INTERNET_DEFAULT_HTTPS_PORT, nullptr, nullptr, INTERNET_SERVICE_HTTP, INTERNET_FLAG_DONT_CACHE | INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_NO_UI | INTERNET_FLAG_SECURE, (DWORD_PTR)&internet_context);
+    HINTERNET internet_session = InternetConnectW(internet, L"api.github.com", INTERNET_DEFAULT_HTTPS_PORT, nullptr, nullptr, INTERNET_SERVICE_HTTP, INTERNET_FLAG_DONT_CACHE | INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_NO_UI | INTERNET_FLAG_SECURE, (DWORD_PTR)&internet_context);
     internet_context.internet_session = internet_session;
     if (!internet_session) {
         on_failure();
         return &internet_context;
     }
 
-    PCTSTR header_accept_types[] = { _t("application/vnd.github+json"), NULL };
-    auto uri = _t("/repos/Bade99/SimpleVeil/releases/latest");
-    HINTERNET internet_request = HttpOpenRequest(internet_session, _t("GET"), uri, nullptr, nullptr, header_accept_types, INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_NO_UI | INTERNET_FLAG_SECURE, (DWORD_PTR)&internet_context);
+    PCTSTR header_accept_types[] = { L"application/vnd.github+json", NULL };
+    auto uri = L"/repos/Bade99/SimpleVeil/releases/latest";
+    HINTERNET internet_request = HttpOpenRequestW(internet_session, L"GET", uri, nullptr, nullptr, header_accept_types, INTERNET_FLAG_NO_AUTH | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_COOKIES | INTERNET_FLAG_NO_UI | INTERNET_FLAG_SECURE, (DWORD_PTR)&internet_context);
     internet_context.internet_request = internet_request;
     if (!internet_request) {
         on_failure();
         return &internet_context;
     }
 
-    auto set_callback_res = InternetSetStatusCallback(internet_request, InternetStatusCallback);
+    auto set_callback_res = InternetSetStatusCallbackW(internet_request, InternetStatusCallback);
     if (set_callback_res == INTERNET_INVALID_STATUS_CALLBACK) {
         on_failure();
         return &internet_context;
     }
 
-    constexpr TCHAR additional_headers[] = _t("X-GitHub-Api-Version: 2022-11-28");
-    auto request_res = HttpSendRequest(internet_request, additional_headers, ARRAYSIZE(additional_headers) - 1, nullptr, 0);
+    constexpr TCHAR additional_headers[] = L"X-GitHub-Api-Version: 2022-11-28";
+    auto request_res = HttpSendRequestW(internet_request, additional_headers, ARRAYSIZE(additional_headers) - 1, nullptr, 0);
     //if (request_res != TRUE) ShowFormattedLastError(); Assert(request_res == TRUE); //NOTE: useless for async operations, request_res is always false
     return &internet_context;
+}
+
+bool load_rich_edit() {
+    if (LoadLibraryW(L"Riched20.dll")) {
+        RICHEDIT_CLASS_VERSION = RICHEDIT_CLASS;
+        richedit_support = true;
+    }
+    else if (LoadLibraryW(L"Msftedit.dll")) {
+        RICHEDIT_CLASS_VERSION = MSFTEDIT_CLASS;
+        richedit_support = true;
+    }
+    else {
+        RICHEDIT_CLASS_VERSION = WC_EDIT;
+        richedit_support = false;
+    }
+    return richedit_support;
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPWSTR /*lpCmdLine*/, _In_ int nCmdShow)
@@ -391,15 +438,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     //Check that no instance is already running on this user session
     //TODO(fran): from my tests this system is user session independent, check that's true for every case, 
     // eg. admin - admin, admin - normal user, normal user - normal user
-    HANDLE single_instance_mutex = CreateMutex(NULL, TRUE, L"SimpleVeil Single Instance Mutex Franco Badenas Abal");
-    if (single_instance_mutex == NULL || GetLastError() == ERROR_ALREADY_EXISTS) {
-        printf("Found another instance of SimpleVeil already running\n");
+    HANDLE single_instance_mutex = CreateMutexW(NULL, TRUE, L"SimpleVeil Single Instance Mutex Franco Badenas Abal");
+    if (single_instance_mutex == NULL || GetLastError() == ERROR_ALREADY_EXISTS) { // Found another instance of SimpleVeil already running
         //If an instance already exists try to show its manager to the user
         //INFO: other ways of solving the hwnd finding: http://www.flounder.com/nomultiples.htm
-        HWND existingApp = FindWindow(unCap_wndclass_uncap_nc, appName);
-        if (existingApp) {
+        HWND existingApp = FindWindowW(unCap_wndclass_uncap_nc, appName);
+        if (existingApp) { // Attempt to show previous instance
             //NOTE: im on a different thread and everything so I cant ask for the state, it doesnt retrieve something valid, therefore I cant get to my client, TODO IMPORTANT: this is a limitation that must be addressed from my framework, I need a way to get to communicate with my client from the parent, maybe a get client state msg is enough
-            printf("Attempt to show previous instance\n");
             //PostMessage(existingApp's client wnd, TRAY, 0, WM_RBUTTONDOWN);
             if (!IsWindowVisible(existingApp)) { //window is minimized
                 ShowWindow(existingApp,SW_SHOW);//TODO(fran): for now im content with just showing the wnd, no animation of it coming from the tray //TODO(fran): the veil could be occluded, we should check that the veil is on top too
@@ -412,7 +457,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     }
     defer{ ReleaseMutex(single_instance_mutex);	CloseHandle(single_instance_mutex); };
 
-#ifndef _DEBUG
+#ifdef _AUTOUPDATER
     auto internet_context = check_for_updates(); defer{ internet_context->close_handles(); }; //TODO: allow the user to configure the 'check for updates' frequency: on app startup, every day, every week, every month, off
 #endif
 
@@ -424,8 +469,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
 
     BOOL comm_res = InitCommonControlsEx(&icc);
     Assert(comm_res);
-
-
 
     LOGFONT lf{ 0 };
     lf.lfQuality = CLEARTYPE_QUALITY;
@@ -465,6 +508,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
 
     init_wndclass_unCap_edit_oneline(hInstance);
 
+    updater::init_wndclass(hInstance);
+
+    load_rich_edit();
+
     // Create Veil window
     HWND veil_wnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
         SimpleVeil_wndclass_veil, L"The Veil itself",
@@ -481,15 +528,33 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     unCapNcLpParam nclpparam;
     nclpparam.client_class_name = unCap_wndclass_uncap_cl;
     nclpparam.client_lp_param = &uncap_cl;
+    nclpparam.is_main_wnd = true;
 
     //NOTE(fran): if you ask for OVERLAPPEDWINDOW someone else draws your nc area
-    uncapnc = CreateWindowEx(WS_EX_CONTROLPARENT | WS_EX_TOPMOST | WS_EX_APPWINDOW, unCap_wndclass_uncap_nc, NULL, WS_THICKFRAME | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
-        uncapnc_rc.left, uncapnc_rc.top, RECTWIDTH(uncapnc_rc), RECTHEIGHT(uncapnc_rc), nullptr, nullptr, hInstance, &nclpparam);
+    uncapnc = CreateWindowEx(WS_EX_CONTROLPARENT | WS_EX_TOPMOST | WS_EX_APPWINDOW, 
+        unCap_wndclass_uncap_nc, NULL,
+        WS_THICKFRAME | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+        uncapnc_rc.left, uncapnc_rc.top, RECTWIDTH(uncapnc_rc), RECTHEIGHT(uncapnc_rc),
+        nullptr, nullptr, hInstance, &nclpparam);
 
     if (!uncapnc) return FALSE;
 
     ShowWindow(uncapnc, nCmdShow);
     UpdateWindow(uncapnc);
+
+    unCapNcLpParam updaterParams;
+    updaterParams.client_class_name = updater::wndclass;
+    updaterParams.client_lp_param = nullptr;
+
+    updaternc = CreateWindowEx(WS_EX_CONTROLPARENT | WS_EX_TOPMOST | WS_EX_APPWINDOW,
+        unCap_wndclass_uncap_nc, nullptr,
+        WS_THICKFRAME | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+        CW_USEDEFAULT, CW_USEDEFAULT, 50 * 16, 50 * 9,
+        nullptr, nullptr, hInstance, &updaterParams);
+
+    if (!updaternc) return FALSE;
+
+    UpdateWindow(updaternc);
 
     HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SIMPLEVEIL));
 
@@ -502,13 +567,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-
-        //if (!IsDialogMessage(hwnd, &msg))
-        //{
-        //	TranslateMessage(&msg);
-        //	DispatchMessage(&msg);
-        //}
-
     }
 
     str serialized;

@@ -272,6 +272,7 @@ static LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 		st->parent = creation_nfo->hwndParent;
 		st->wnd = hwnd;
 		st->msg_to_send = (UINT)(UINT_PTR)creation_nfo->hMenu;
+		if (creation_nfo->lpszName) SetWindowText(st->wnd, creation_nfo->lpszName);
 		return TRUE; //continue creation, this msg seems kind of more of a user setup place, strange considering there's also WM_CREATE
 	} break;
 	case WM_NCCALCSIZE: { //2nd msg received https://docs.microsoft.com/en-us/windows/win32/winmsg/wm-nccalcsize

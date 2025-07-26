@@ -90,6 +90,9 @@
     <ClInclude Include="unCap_animation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="unCap_updater.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SimpleVeil.cpp">

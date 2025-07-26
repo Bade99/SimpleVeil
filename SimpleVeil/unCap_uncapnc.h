@@ -35,6 +35,7 @@
 constexpr TCHAR unCap_wndclass_uncap_nc[] = TEXT("unCap_wndclass_uncap_nc"); //Non client uncap
 
 struct unCapNcLpParam {//NOTE: pass a pointer to unCapNcLpParam to set up the client area, if client_class_name is null no client is created
+	bool is_main_wnd = false;
 	TCHAR* client_class_name;
 	void* client_lp_param;
 };
@@ -61,6 +62,8 @@ struct unCapNcProcState {
 	bool active;
 
 	RECT rc_icon;
+
+	unCapNcLpParam* settings;
 
 	struct {//menu related
 		HMENU menu; //The menu that contains all the other menus, the ones that go in the menu bar, and the ones inside of each of those 
@@ -392,6 +395,8 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		CREATESTRUCT* createnfo = (CREATESTRUCT*)lparam;
 
 		unCapNcLpParam* lpParam = (unCapNcLpParam*)createnfo->lpCreateParams;
+
+		state->settings = lpParam;
 
 		SetWindowText(state->wnd, createnfo->lpszName); //NOTE: for handmade classes you have to manually call setwindowtext
 		RECT btn_min_rc = UNCAPNC_calc_btn_rc(state,1);
@@ -946,7 +951,8 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	} break;
 	case WM_DESTROY:
 	{
-		PostQuitMessage(0);
+		if (state->settings->is_main_wnd)
+			PostQuitMessage(0);
 	} break;
 	case WM_GETMINMAXINFO:
 		//FIRST msg sent to the window
@@ -1162,7 +1168,8 @@ LRESULT CALLBACK UncapNcProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			return DefWindowProc(hwnd, msg, wparam, lparam);
 		}
 #ifdef _DEBUG
-		Assert(0);
+		//Assert(0);
+		return DefWindowProc(hwnd, msg, wparam, lparam);
 #else 
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 #endif

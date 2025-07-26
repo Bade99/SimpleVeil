@@ -4,7 +4,6 @@
 #include "unCap_Serialization.h"
 #include "LANGUAGE_MANAGER.h"
 #include "TRAY_HANDLER.h"
-#include "fmt.h"
 #include "resource.h"
 #include "unCap_uncapnc.h"
 #include "SimpleVeil_hotkey.h"
@@ -26,7 +25,11 @@ constexpr int y_pad = 10;
 constexpr int brightness_slider_max = 90;
 
 #define APP_NAME "SimpleVeil"
-#define APP_VERSION "1.0.2"
+#ifndef _AUTOUPDATER_TEST
+	#define APP_VERSION "1.0.2"
+#else
+	#define APP_VERSION "0.0.0"
+#endif
 
 constexpr TCHAR appName[] = TEXT(APP_NAME);
 
@@ -332,7 +335,7 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 			SIMPLEVEIL_toggle_wnd_visibility(state);
 			return 0;
 		} break;
-		case BUTTON_ONOFF: //TODO: when the msg comes from the taskbar it's NOT re-rendering the toogle button
+		case BUTTON_ONOFF:
 		{
 			state->settings->is_veil_on = !state->settings->is_veil_on;
 
@@ -401,7 +404,8 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 	default:
 	{
 #ifdef _DEBUG
-		Assert(0);
+		//Assert(0);
+		return DefWindowProc(hwnd, msg, wparam, lparam);
 #else 
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 #endif
