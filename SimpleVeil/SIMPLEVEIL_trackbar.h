@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <CommCtrl.h>
 #include "windows_msg_mapper.h"
+#include "unCap_wnd_common.h"
 
 //Also known as Slider
 
@@ -145,6 +146,10 @@ LRESULT CALLBACK TrackbarProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam, 
 	case WM_SETTEXT:
 	{
 		return HandleSetText(wnd, msg, wparam, lparam);
+	} break;
+	case WM_SETCURSOR:
+	{
+		return handle_wm_setcursor(wnd, msg, wparam, lparam, IDC_HAND);
 	} break;
 	default: 
 	{

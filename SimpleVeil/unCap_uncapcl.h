@@ -17,6 +17,7 @@
 #define SLIDER_BRIGHTNESS 15
 #define TRAY 16
 #define EDIT_HOTKEY 17
+#define BUTTON_SETTINGS 18
 
 //TODO(fran): check that the veil remains on top, maybe update from time to time, or find some trigger when someone else goes on top
 
@@ -26,7 +27,7 @@ constexpr int brightness_slider_max = 90;
 
 #define APP_NAME "SimpleVeil"
 #ifndef _AUTOUPDATER_TEST
-	#define APP_VERSION "1.0.2"
+	#define APP_VERSION "1.0.3"
 #else
 	#define APP_VERSION "0.0.0"
 #endif
@@ -35,12 +36,50 @@ constexpr TCHAR appName[] = TEXT(APP_NAME);
 
 constexpr TCHAR appVersion[] = TEXT(APP_VERSION);
 
+enum UpdateCheckFrequency
+{
+#define _foreach_update_check_frequency(op) \
+				op(Never,=0)  \
+				op(Always,)  \
+				op(Daily,)  \
+				op(Weekly,)  \
+				op(Monthly,)  \
+
+	_foreach_update_check_frequency(_generate_enum_member)
+};
+
+
+namespace userial {
+	static str serialize(UpdateCheckFrequency v) {
+		switch (v) {
+			_foreach_update_check_frequency(_string_enum_case);
+			default: return L"";
+		}
+	}
+	static bool deserialize(UpdateCheckFrequency& var, str name, const str& content) {
+		str start = name + _keyvaluesepartor;
+		size_t s = find_identifier(content, 0, start);
+		if (str_found(s)) {
+			s += start.size();
+			str substr = content.substr(s);//TODO(fran):we dont really need a substr and neither till the end of content
+			bool found = false;
+#define _compare_enum_string_found(member,value) if(!substr.compare(0,str(_t(#member)).size(),_t(#member))){var = member; found=true;} else
+			_foreach_update_check_frequency(_compare_enum_string_found) {/*you can do something on the final else case*/ };
+
+			return found;
+		}
+		return false;
+	}
+}
+
 struct unCapClSettings {
 
 #define foreach_unCapClSettings_member(op) \
 		op(RECT, rc,200,200,700,482 ) \
 		op(int, slider_brightness_pos,10 ) \
 		op(hotkey_nfo, hotkey,0,0,0 ) \
+		op(UpdateCheckFrequency, update_check_frequency,UpdateCheckFrequency::Daily ) \
+		op(i64, last_update_check,0 ) \
 
 		HWND veil_wnd;
 		bool is_veil_on;
@@ -58,6 +97,7 @@ _add_struct_to_serialization_namespace(unCapClSettings)
 struct unCapClProcState {
 	HWND wnd;
 	HWND nc_parent;
+	HWND settingsnc;
 
 	struct {//menu related
 		HMENU menu;
@@ -69,8 +109,9 @@ struct unCapClProcState {
 			HWND toggle_button_on_off;
 			HWND slider_brightness;
 			HWND edit_hotkey;
+			HWND button_settings;
 		};
-		HWND all[3];//REMEMBER TO UPDATE
+		HWND all[4];//REMEMBER TO UPDATE
 	}controls;
 	unCapClSettings* settings;
 
@@ -84,6 +125,9 @@ void UNCAPCL_ResizeWindows(unCapClProcState* state) {
 	int h = RECTHEIGHT(r);
 	int w_pad = (int)((float)w * .05f);
 	int h_pad = (int)((float)h * .05f);
+
+	i32 fixed_w_pad = 30 / 6;
+	i32 fixed_h_pad = fixed_w_pad;
 
 	int toggle_btn_onoff_w = 70;
 	int toggle_btn_onoff_h = 30;
@@ -100,9 +144,15 @@ void UNCAPCL_ResizeWindows(unCapClProcState* state) {
 	int hotkey_h = toggle_btn_onoff_h;
 	int hotkey_y = h - hotkey_h - h_pad;
 
+	int btn_settings_w = hotkey_h;
+	int btn_settings_x = w - btn_settings_w - (h - (hotkey_y + hotkey_h));
+	int btn_settings_h = btn_settings_w;
+	int btn_settings_y = hotkey_y;
+
 	MoveWindow(state->controls.slider_brightness, slider_brightness_x, slider_brightness_y, slider_brightness_w, slider_brightness_h, FALSE);
 	MoveWindow(state->controls.toggle_button_on_off, toggle_btn_onoff_x, toggle_btn_onoff_y, toggle_btn_onoff_w, toggle_btn_onoff_h, FALSE);
 	MoveWindow(state->controls.edit_hotkey, hotkey_x, hotkey_y, hotkey_w, hotkey_h, FALSE);
+	MoveWindow(state->controls.button_settings, btn_settings_x, btn_settings_y, btn_settings_w, btn_settings_h, FALSE);
 }
 
 void SetText_app_name(HWND wnd, const TCHAR* new_appname) {
@@ -110,33 +160,45 @@ void SetText_app_name(HWND wnd, const TCHAR* new_appname) {
 }
 
 void UNCAPCL_add_controls(unCapClProcState* state, HINSTANCE hInstance) {
+	auto& controls = state->controls;
+
 	TrackbarProcState* trackbarprocstate = (TrackbarProcState*)calloc(1, sizeof(TrackbarProcState));
-	state->controls.slider_brightness = CreateWindowExW(WS_EX_COMPOSITED | WS_EX_TRANSPARENT, TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_NOTICKS | TBS_HORZ
+	controls.slider_brightness = CreateWindowExW(WS_EX_COMPOSITED | WS_EX_TRANSPARENT, TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_NOTICKS | TBS_HORZ
 		, 0, 0, 0, 0, state->wnd, (HMENU)SLIDER_BRIGHTNESS, NULL, NULL);
 
-	SendMessage(state->controls.slider_brightness, TBM_SETRANGE, TRUE, (LPARAM)MAKELONG(0, brightness_slider_max));
-	SendMessage(state->controls.slider_brightness, TBM_SETPAGESIZE, 0, (LPARAM)5);
-	SendMessage(state->controls.slider_brightness, TBM_SETLINESIZE, 0, (LPARAM)5);
-	SendMessage(state->controls.slider_brightness, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)state->settings->slider_brightness_pos);
+	SendMessage(controls.slider_brightness, TBM_SETRANGE, TRUE, (LPARAM)MAKELONG(0, brightness_slider_max));
+	SendMessage(controls.slider_brightness, TBM_SETPAGESIZE, 0, (LPARAM)5);
+	SendMessage(controls.slider_brightness, TBM_SETLINESIZE, 0, (LPARAM)5);
+	SendMessage(controls.slider_brightness, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)state->settings->slider_brightness_pos);
 
-	SetWindowSubclass(state->controls.slider_brightness, TrackbarProc, 0, (DWORD_PTR)trackbarprocstate);
+	SetWindowSubclass(controls.slider_brightness, TrackbarProc, 0, (DWORD_PTR)trackbarprocstate);
 	TRACKBAR_set_brushes(trackbarprocstate,
 		unCap_colors.TrackbarThumb, unCap_colors.TrackbarChannelBk, unCap_colors.TrackbarThumbChannelBk, unCap_colors.TrackbarChannelBorder, unCap_colors.TrackbarThumbChannelBorder,
 		state->controls.slider_brightness);
-	TRACKBAR_set_dimensions(trackbarprocstate, 1, state->controls.slider_brightness);
+	TRACKBAR_set_dimensions(trackbarprocstate, 1, controls.slider_brightness);
 
-	state->controls.toggle_button_on_off = CreateWindowExW(WS_EX_COMPOSITED | WS_EX_TRANSPARENT, unCap_wndclass_toggle_button, NULL, WS_VISIBLE | WS_CHILD | WS_TABSTOP
+	controls.toggle_button_on_off = CreateWindowExW(WS_EX_COMPOSITED | WS_EX_TRANSPARENT, unCap_wndclass_toggle_button, NULL, WS_VISIBLE | WS_CHILD | WS_TABSTOP
 		, 0, 0, 0, 0, state->wnd, (HMENU)BUTTON_ONOFF, NULL, NULL);
 	UNCAPTGLBTN_set_brushes(state->controls.toggle_button_on_off, TRUE, unCap_colors.Img, unCap_colors.Img, unCap_colors.ToggleBk_On, unCap_colors.ToggleBk_Off, unCap_colors.ToggleBkPush_On, unCap_colors.ToggleBkPush_Off, unCap_colors.ToggleBkMouseOver_On, unCap_colors.ToggleBkMouseOver_Off);
 	UNCAPTGLBTN_set_state_reference(state->controls.toggle_button_on_off, &state->settings->is_veil_on);
 
-	state->controls.edit_hotkey = CreateWindowW(unCap_wndclass_edit_oneline, L"", WS_VISIBLE | WS_CHILD | ES_CENTER | ES_ROUNDRECT | ES_ELLIPSIS
+	controls.edit_hotkey = CreateWindowW(unCap_wndclass_edit_oneline, L"", WS_VISIBLE | WS_CHILD | ES_CENTER | ES_ROUNDRECT | ES_ELLIPSIS
 		, 0,0,0,0, state->wnd, (HMENU)EDIT_HOTKEY, NULL, NULL);
 	EDITONELINE_set_brushes(state->controls.edit_hotkey, TRUE, unCap_colors.ControlTxt, unCap_colors.ControlBk, unCap_colors.Img, unCap_colors.ControlTxt_Disabled, unCap_colors.ControlBk_Disabled, unCap_colors.Img_Disabled);
 	HotkeyProcState* hotkeyprocstate = (HotkeyProcState*)calloc(1, sizeof(HotkeyProcState));
 	SetWindowSubclass(state->controls.edit_hotkey, HotkeyProc, 0, (DWORD_PTR)hotkeyprocstate);
 	HOTKEY_set_brushes(hotkeyprocstate, unCap_colors.ControlTxt, unCap_colors.ControlTxt_Disabled, unCap_colors.HotkeyTxt_Accepted, unCap_colors.HotkeyTxt_Rejected, state->controls.edit_hotkey);
 	hotkeyprocstate->stored_hk = &state->settings->hotkey;
+
+	controls.button_settings = CreateWindowExW(
+		WS_EX_COMPOSITED | WS_EX_TRANSPARENT, unCap_wndclass_button, nullptr, WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_ROUNDRECT | BS_ICON
+		, 0, 0, 0, 0, state->wnd, (HMENU)BUTTON_SETTINGS, NULL, NULL);
+	UNCAPBTN_set_brushes(controls.button_settings, TRUE, unCap_colors.Img, unCap_colors.ControlBk, unCap_colors.ControlTxt, unCap_colors.ControlBkPush, unCap_colors.ControlBkMouseOver);
+	UNCAPBTN_set_cursor(controls.button_settings, IDC_HAND);
+	//auto settings_icon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(UNCAP_ICO_SETTINGS));
+	auto settings_icon = LoadImage(GetModuleHandle(NULL), MAKEINTRESOURCE(UNCAP_ICO_SETTINGS), IMAGE_ICON, 64, 64, LR_SHARED);
+	PostMessage(controls.button_settings, BM_SETIMAGE, IMAGE_ICON, (WPARAM)settings_icon);
+	UNCAPBTN_set_style(controls.button_settings, 0);
 	
 	for (auto ctl : state->controls.all)
 		SendMessage(ctl, WM_SETFONT, (WPARAM)unCap_fonts.General, TRUE);
@@ -205,6 +267,27 @@ void SIMPLEVEIL_toggle_wnd_visibility(unCapClProcState* state) {
 		RestoreWndFromTray(state->nc_parent);//TODO(fran): the veil could be occluded, we should check that the veil is on top too
 	else //window is not minimized //TODO(fran): _but_ could be occluded (in which case we want to SW_SHOW), there doesnt seem to be an easy way to know whether your window is actually visible to the user
 		MinimizeWndToTray(state->nc_parent);
+}
+
+void SIMPLEVEIL_create_settings_wnd(unCapClProcState* state) {
+	static unCapNcLpParam settingsParams;
+	settingsParams.client_class_name = (TCHAR*)get_settings_wndclass();
+	settingsParams.client_lp_param = state->settings;
+	settingsParams.can_minimize = false;
+	int size = 22;
+	state->settingsnc = CreateWindowExW(WS_EX_CONTROLPARENT | WS_EX_TOPMOST | WS_EX_APPWINDOW,
+		unCap_wndclass_uncap_nc, nullptr,
+		WS_THICKFRAME | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+		CW_USEDEFAULT, CW_USEDEFAULT, size * 16, size * 9,
+		nullptr, nullptr, GetModuleHandleW(nullptr), &settingsParams);
+
+	if (!state->settingsnc) MessageBoxW(nullptr, L"Could not create the Settings window", L"Error", MB_OK | MB_ICONWARNING);
+}
+
+void SIMPLEVEIL_show_settings_wnd(unCapClProcState* state) {
+	RECT r; GetWindowRect(state->nc_parent, &r);
+	auto offset = 15; //TODO: clamp to current screen dimensions so that it isnt placed outside the screen
+	SetWindowPos(state->settingsnc, HWND_TOPMOST, r.left - offset, r.top - offset, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
 }
 
 LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -295,6 +378,7 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 		st->nc_parent = create_nfo->hwndParent;
 		st->settings = (unCapClSettings*)create_nfo->lpCreateParams;
 		//UNCAPCL_load_settings(st);
+		SIMPLEVEIL_create_settings_wnd(st);
 
 		return TRUE;
 	} break;
@@ -342,6 +426,10 @@ LRESULT CALLBACK UncapClProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) 
 			UNCAPTGLBTN_start_animation(UNCAPTGLBTN_get_state(state->controls.toggle_button_on_off)); //TODO: this is a HACK so that the toggle button re-renders when you click on the tray to show/hide the veil
 
 			SIMPLEVEIL_update_veil_wnd(state);
+		} break;
+		case BUTTON_SETTINGS:
+		{
+			SIMPLEVEIL_show_settings_wnd(state);
 		} break;
 		case UNCAPNC_MINIMIZE://NOTE: msg sent from the parent, expects return !=0 in case we handle it
 		{

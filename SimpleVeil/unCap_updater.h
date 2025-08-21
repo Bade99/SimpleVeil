@@ -51,6 +51,7 @@ namespace updater {
 		i32 fixed_h_pad = fixed_w_pad;
 
 		rect_f32 markdown = rect_f32::from_RECT(r);
+		markdown.inflate(-2*fixed_w_pad, -2*fixed_h_pad);
 		rect_f32 progressbar = markdown.cut_bottom(small_wnd_h);
 		auto button_space = rect_f32{ progressbar };
 		rect_f32 btn_yes = button_space.cut_right(small_wnd_w);
@@ -182,15 +183,17 @@ namespace updater {
 			, 0, 0, 0, 0, state->wnd, nullptr, nullptr, nullptr);
 
 		controls.button_cancel = CreateWindowExW(
-			WS_EX_COMPOSITED | WS_EX_TRANSPARENT, unCap_wndclass_button, L"Cancel", WS_VISIBLE | WS_CHILD | WS_TABSTOP
+			WS_EX_COMPOSITED | WS_EX_TRANSPARENT, unCap_wndclass_button, L"Cancel", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_ROUNDRECT
 			, 0, 0, 0, 0, state->wnd, (HMENU)BUTTON_CANCEL, NULL, NULL);
-		UNCAPBTN_set_brushes(controls.button_cancel, TRUE, unCap_colors.Img, unCap_colors.ControlBk, unCap_colors.ControlTxt, unCap_colors.ControlBkPush, unCap_colors.ControlBkMouseOver);
+		UNCAPBTN_set_brushes(controls.button_cancel, TRUE, unCap_colors.Img, unCap_colors.CaptionBk_Inactive, unCap_colors.ControlTxt, unCap_colors.ControlBkPush, unCap_colors.ControlBkMouseOver);
+		UNCAPBTN_set_cursor(controls.button_cancel, IDC_HAND);
 
 
 		controls.button_download = CreateWindowExW(
-			WS_EX_COMPOSITED | WS_EX_TRANSPARENT, unCap_wndclass_button, L"Download", WS_VISIBLE | WS_CHILD | WS_TABSTOP
+			WS_EX_COMPOSITED | WS_EX_TRANSPARENT, unCap_wndclass_button, L"Download", WS_VISIBLE | WS_CHILD | WS_TABSTOP | BS_ROUNDRECT
 			, 0, 0, 0, 0, state->wnd, (HMENU)BUTTON_DOWNLOAD, NULL, NULL);
 		UNCAPBTN_set_brushes(controls.button_download, TRUE, unCap_colors.Img, unCap_colors.ControlBk, unCap_colors.ControlTxt, unCap_colors.ControlBkPush, unCap_colors.ControlBkMouseOver);
+		UNCAPBTN_set_cursor(controls.button_download, IDC_HAND);
 
 		controls.progressbar_download = CreateWindowExW(
 			WS_EX_COMPOSITED | WS_EX_TRANSPARENT, PROGRESS_CLASS, 0, WS_CHILD | PBS_SMOOTH

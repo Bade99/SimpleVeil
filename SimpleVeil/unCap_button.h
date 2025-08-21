@@ -5,6 +5,7 @@
 #include "unCap_Helpers.h"
 #include "unCap_Renderer.h"
 #include "windows_undoc.h"
+#include "unCap_wnd_common.h"
 
 //NOTE: this buttons can have text or an img, but not both at the same time
 //NOTE: it's important that the parent uses WS_CLIPCHILDREN to avoid horrible flickering
@@ -14,6 +15,8 @@
 constexpr TCHAR unCap_wndclass_button[] = TEXT("unCap_wndclass_button");
 
 static LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+
+#define BS_ROUNDRECT 0x0001'0000L
 
 struct ButtonProcState { //NOTE: must be initialized to zero
 	HWND wnd;
@@ -27,10 +30,14 @@ struct ButtonProcState { //NOTE: must be initialized to zero
 
 	HFONT font;
 
-	HBRUSH br_border, br_bk, br_fore, br_bkpush, br_bkmouseover;
+	HBRUSH br_border, br_bk, br_fore, br_bkpush, br_bkmouseover, br_border_disabled, br_bk_disabled, br_fore_disabled;
+
+	f32 borderThickness;
 
 	HICON icon;
 	HBITMAP bmp;
+
+	void* cursor;
 };
 
 void init_wndclass_unCap_button(HINSTANCE instance) {
@@ -59,7 +66,7 @@ ButtonProcState* UNCAPBTN_get_state(HWND hwnd) {
 }
 
 //NOTE: any NULL HBRUSH remains unchanged
-void UNCAPBTN_set_brushes(HWND uncap_btn, BOOL repaint, HBRUSH border_br, HBRUSH bk_br, HBRUSH fore_br, HBRUSH bkpush_br, HBRUSH bkmouseover_br) {
+void UNCAPBTN_set_brushes(HWND uncap_btn, BOOL repaint, HBRUSH border_br, HBRUSH bk_br, HBRUSH fore_br, HBRUSH bkpush_br, HBRUSH bkmouseover_br, HBRUSH borderdisabled_br = nullptr, HBRUSH bkdisabled_br = nullptr, HBRUSH foredisabled_br = nullptr ) {
 	if (uncap_btn) {
 		ButtonProcState* state = UNCAPBTN_get_state(uncap_btn);
 		if (border_br)state->br_border = border_br;
@@ -67,7 +74,26 @@ void UNCAPBTN_set_brushes(HWND uncap_btn, BOOL repaint, HBRUSH border_br, HBRUSH
 		if (fore_br)state->br_fore = fore_br;
 		if (bkpush_br)state->br_bkpush = bkpush_br;
 		if (bkmouseover_br)state->br_bkmouseover = bkmouseover_br;
+		if (borderdisabled_br)state->br_border_disabled = borderdisabled_br;
+		if (bkdisabled_br)state->br_bk_disabled = bkdisabled_br;
+		if (foredisabled_br)state->br_fore_disabled = foredisabled_br;
 		if (repaint)InvalidateRect(state->wnd, NULL, TRUE);
+	}
+}
+
+void UNCAPBTN_set_style(HWND uncap_btn, f32 border) {
+	if (uncap_btn) {
+		ButtonProcState* state = UNCAPBTN_get_state(uncap_btn);
+		state->borderThickness = border;
+
+		InvalidateRect(state->wnd, NULL, TRUE);
+	}
+}
+
+void UNCAPBTN_set_cursor(HWND uncap_btn, void* cursor = IDC_ARROW) {
+	if (uncap_btn) {
+		ButtonProcState* state = UNCAPBTN_get_state(uncap_btn);
+		state->cursor = cursor;
 	}
 }
 
@@ -108,6 +134,12 @@ static LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 		state->onMouseOver = false;
 		InvalidateRect(state->wnd, NULL, TRUE);
 		return 0;
+	} break;
+	case WM_ENABLE:
+	{
+		//Received after a call to EnableWindow (at this point WS_DISABLED has already been set)
+		InvalidateRect(state->wnd, NULL, TRUE);
+		return DefWindowProc(hwnd, msg, wparam, lparam);
 	} break;
 	case WM_NCDESTROY:
 	{
@@ -194,17 +226,7 @@ static LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 	} break;
 	case WM_SETCURSOR:
 	{
-		//DefWindowProc passes this to its parent to see if it wants to change the cursor settings, we'll make a decision, setting the mouse cursor, and halting proccessing so it stays like that
-		//Sent after getting the result of WM_NCHITTEST, mouse is inside our window and mouse input is not being captured
-
-		/* https://docs.microsoft.com/en-us/windows/win32/learnwin32/setting-the-cursor-image
-			if we pass WM_SETCURSOR to DefWindowProc, the function uses the following algorithm to set the cursor image:
-			1. If the window has a parent, forward the WM_SETCURSOR message to the parent to handle.
-			2. Otherwise, if the window has a class cursor, set the cursor to the class cursor.
-			3. If there is no class cursor, set the cursor to the arrow cursor.
-		*/
-		//NOTE: I think this is good enough for now
-		return DefWindowProc(hwnd, msg, wparam, lparam);
+		return handle_wm_setcursor(hwnd, msg, wparam, lparam, state->cursor);
 	} break;
 	case WM_NCHITTEST:
 	{
@@ -272,6 +294,7 @@ static LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 		st->parent = creation_nfo->hwndParent;
 		st->wnd = hwnd;
 		st->msg_to_send = (UINT)(UINT_PTR)creation_nfo->hMenu;
+		st->borderThickness = 1;
 		if (creation_nfo->lpszName) SetWindowText(st->wnd, creation_nfo->lpszName);
 		return TRUE; //continue creation, this msg seems kind of more of a user setup place, strange considering there's also WM_CREATE
 	} break;
@@ -316,7 +339,12 @@ static LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 
 		//TODO(fran): Check that we are going to paint something new
 		HBRUSH oldbr, bkbr;
-		if (state->onMouseOver && state->onLMouseClick) {
+		DWORD style = (DWORD)GetWindowLongPtr(state->wnd, GWL_STYLE);
+		auto isDisabled = style & WS_DISABLED;
+		if (isDisabled) {
+			bkbr = state->br_bk_disabled;
+		}
+		else if (state->onMouseOver && state->onLMouseClick) {
 			bkbr = state->br_bkpush;
 		}
 		else if (state->onMouseOver || state->OnMouseTracking) {
@@ -329,19 +357,21 @@ static LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 		oldbr = SelectBrush(dc, bkbr);
 
 		//TODO(clipping)
-		int borderSize = 1;
-		HBRUSH borderbr = state->br_border;
-		HPEN pen = CreatePen(PS_SOLID, borderSize, ColorFromBrush(borderbr)); //border
+		int borderSize = state->borderThickness;
+		HBRUSH borderbr = !isDisabled ? state->br_border : state->br_border_disabled;
+		//Border and background
+		if (style & BS_ROUNDRECT) {
+			urender::draw_round_rectangle(dc, rc, RECTH(rc) / 2.f, bkbr);
+			if (borderSize) urender::draw_round_rectangle_outline(dc, rc, RECTH(rc) / 2.f, borderbr, borderSize);
+		}
+		else {
+			HPEN pen = CreatePen(borderSize ? PS_SOLID : PS_NULL, borderSize, ColorFromBrush(borderbr)); //border
+			HPEN oldpen = (HPEN)SelectObject(dc, pen); defer{ SelectObject(dc, oldpen); DeleteObject(pen); };
 
-		HPEN oldpen = (HPEN)SelectObject(dc, pen);
+			Rectangle(dc, rc.left, rc.top, rc.right, rc.bottom); //uses pen for border and brush for bk
+		}
 
-		//Border
-		Rectangle(dc, rc.left, rc.top, rc.right, rc.bottom); //uses pen for border and brush for bk
-
-		SelectObject(dc, oldpen);
-		DeleteObject(pen);
-
-		DWORD style = (DWORD)GetWindowLongPtr(state->wnd, GWL_STYLE);
+		auto forebr = !isDisabled ? state->br_fore : state->br_fore_disabled;
 		if (style & BS_ICON) {//Here will go buttons that only have an icon
 
 			HICON icon = state->icon;
@@ -365,7 +395,7 @@ static LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 				int bmp_width = bmp_height;
 				int bmp_align_height = (RECTHEIGHT(rc) - bmp_height) / 2;
 				int bmp_align_width = (RECTWIDTH(rc) - bmp_width) / 2;
-				urender::draw_mask(dc, bmp_align_width, bmp_align_height, bmp_width, bmp_height, state->bmp, 0, 0, bitmap.bmWidth, bitmap.bmHeight, state->br_fore);
+				urender::draw_mask(dc, bmp_align_width, bmp_align_height, bmp_width, bmp_height, state->bmp, 0, 0, bitmap.bmWidth, bitmap.bmHeight, forebr);
 			}
 		}
 		else { //Here will go buttons that only have text
@@ -373,7 +403,7 @@ static LRESULT CALLBACK ButtonProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 			if (font) {//if font == NULL then it is using system font(default I assume)
 				(HFONT)SelectObject(dc, (HGDIOBJ)font);
 			}
-			SetTextColor(dc, ColorFromBrush(state->br_fore));
+			SetTextColor(dc, ColorFromBrush(forebr));
 			WCHAR Text[40];
 			int len = (int)SendMessage(state->wnd, WM_GETTEXT, ARRAYSIZE(Text), (LPARAM)Text);
 

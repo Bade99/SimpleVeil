@@ -11,6 +11,8 @@
 #error This application can only be built for unicode (utf16) versions of Windows
 #endif
 
+#define __STDC_WANT_LIB_EXT1__ 1 //add safe function definitions for c standard lib
+
 #ifdef _DEBUG
 #define _SHOWCONSOLE
 #define _AUTOUPDATER
@@ -20,8 +22,13 @@
 #define _AUTOUPDATER
 #endif
 
+#include "unCap_Platform.h"
+
 static const wchar_t* RICHEDIT_CLASS_VERSION = nullptr;
 static bool richedit_support = false;
+
+struct unCapClSettings;
+const utf16* get_settings_wndclass();
 
 #include "resource.h"
 #include "targetver.h"
@@ -42,6 +49,7 @@ static bool richedit_support = false;
 #include "unCap_Serialization.h"
 #include "unCap_edit_oneline.h"
 #include "unCap_uncapcl.h"
+#include "unCap_settings.h"
 #include "SimpleVeil_veil.h"
 #include <vector>
 #include <algorithm>
@@ -72,18 +80,6 @@ UNCAP_FONTS unCap_fonts{ 0 };
 
 HWND uncapnc, updaternc;
 
-//The dc is passed to EnumFontFamiliesEx, you can just pass the desktop dc for example //TODO(fran): can we guarantee which dc we use doesnt matter? in that case dont ask the user for a dc and do it myself
-BOOL hasFontFace(HDC dc, const utf16* facename) {
-    int res = EnumFontFamiliesExW(dc/*You have to put some dc,not NULL*/, NULL
-        , [](const LOGFONT* lpelfe, const TEXTMETRIC* /*lpntme*/, DWORD /*FontType*/, LPARAM lparam)->int {
-            if (!StrCmpIW((utf16*)lparam, lpelfe->lfFaceName)) {//Non case-sensitive comparison
-                return 0;
-            }
-            return 1;
-        }
-    , (LPARAM)facename, NULL);
-    return !res;
-}
 str GetFontFaceName() {
     //Font guidelines: https://docs.microsoft.com/en-us/windows/win32/uxguide/vis-fonts
     //Stock fonts: https://docs.microsoft.com/en-us/windows/win32/gdi/using-a-stock-font-to-draw-text
@@ -109,9 +105,10 @@ str GetFontFaceName() {
                                         , L"Microsoft JhengHei", L"Microsoft JhengHei UI" };
 
     for (int i = 0; i < ARRAYSIZE(requested_fontname); i++)
-        if (std::any_of(fontnames.begin(), fontnames.end(), [f = requested_fontname[i]](str s) {return !s.compare(f); })) return requested_fontname[i];
+        if (std::any_of(fontnames.begin(), fontnames.end(), [f = requested_fontname[i]](str s) {return !StrCmpIW(s.c_str(), f); })) 
+            return requested_fontname[i];
 
-    return TEXT("");
+    return L"";
 }
 
 void ShowFormattedLastError(DWORD dw = GetLastError())
@@ -119,7 +116,7 @@ void ShowFormattedLastError(DWORD dw = GetLastError())
     LPCTSTR lpMsgBuf;
 
     auto title = L"Error";
-    auto error_code = str(L"\nError code: ") + to_str(dw);
+    auto error_code = L"\nError code: " + to_str(dw);
 
     if (FormatMessageW(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_HMODULE | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -457,10 +454,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     }
     defer{ ReleaseMutex(single_instance_mutex);	CloseHandle(single_instance_mutex); };
 
-#ifdef _AUTOUPDATER
-    auto internet_context = check_for_updates(); defer{ internet_context->close_handles(); }; //TODO: allow the user to configure the 'check for updates' frequency: on app startup, every day, every week, every month, off
-#endif
-
     urender::init(); defer{ urender::uninit(); };
 
     //Initialization of common controls
@@ -496,6 +489,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     default_colors_if_not_set(&unCap_colors);
     defer{ for (HBRUSH& b : unCap_colors.brushes) if (b) { DeleteBrush(b); b = NULL; } };
 
+#ifdef _AUTOUPDATER
+    _internet_context* internet_context = nullptr; defer{ if (internet_context) internet_context->close_handles(); };
+    auto current_time = time(nullptr);
+    auto days = [](u32 cnt) {return cnt * 24 * 60 * 60; };
+    i64 update_period;
+    switch (uncap_cl.update_check_frequency) {
+    case UpdateCheckFrequency::Always: update_period = 0; break;
+    case UpdateCheckFrequency::Daily: update_period = days(1); break;
+    case UpdateCheckFrequency::Weekly: update_period = days(7); break;
+    case UpdateCheckFrequency::Monthly: update_period = days(30); break;
+    case UpdateCheckFrequency::Never: update_period = _I64_MAX; break;
+    }
+    if (current_time - uncap_cl.last_update_check > update_period) {
+        uncap_cl.last_update_check = current_time;
+        internet_context = check_for_updates();
+    }
+#endif
+
     init_wndclass_unCap_uncapcl(hInstance);
 
     init_wndclass_unCap_uncapnc(hInstance);
@@ -509,6 +520,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     init_wndclass_unCap_edit_oneline(hInstance);
 
     updater::init_wndclass(hInstance);
+
+    settings::init_wndclass(hInstance);
 
     load_rich_edit();
 
@@ -545,6 +558,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstan
     unCapNcLpParam updaterParams;
     updaterParams.client_class_name = updater::wndclass;
     updaterParams.client_lp_param = nullptr;
+    updaterParams.can_minimize = false;
 
     updaternc = CreateWindowEx(WS_EX_CONTROLPARENT | WS_EX_TOPMOST | WS_EX_APPWINDOW,
         unCap_wndclass_uncap_nc, nullptr,

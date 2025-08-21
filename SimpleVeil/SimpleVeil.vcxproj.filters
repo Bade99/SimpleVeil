@@ -93,6 +93,15 @@
     <ClInclude Include="unCap_updater.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="unCap_wnd_common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="unCap_settings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="unCap_combo_subclass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SimpleVeil.cpp">
@@ -127,6 +136,9 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="..\Icons\logo.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\Icons\settings.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

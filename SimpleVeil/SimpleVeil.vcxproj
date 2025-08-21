@@ -161,6 +161,7 @@
     <ClInclude Include="SimpleVeil_veil.h" />
     <ClInclude Include="TRAY_HANDLER.h" />
     <ClInclude Include="unCap_animation.h" />
+    <ClInclude Include="unCap_combo_subclass.h" />
     <ClInclude Include="unCap_edit_oneline.h" />
     <ClInclude Include="unCap_Helpers.h" />
     <ClInclude Include="unCap_math.h" />
@@ -171,11 +172,13 @@
     <ClInclude Include="unCap_Reflection.h" />
     <ClInclude Include="unCap_Renderer.h" />
     <ClInclude Include="unCap_Serialization.h" />
+    <ClInclude Include="unCap_settings.h" />
     <ClInclude Include="unCap_toggle_button.h" />
     <ClInclude Include="unCap_uncapcl.h" />
     <ClInclude Include="unCap_uncapnc.h" />
     <ClInclude Include="unCap_updater.h" />
     <ClInclude Include="unCap_Vector.h" />
+    <ClInclude Include="unCap_wnd_common.h" />
     <ClInclude Include="windows_msg_mapper.h" />
     <ClInclude Include="windows_undoc.h" />
     <ClInclude Include="windows_vk_mapper.h" />
@@ -193,6 +196,7 @@
     <Image Include="..\Icons\Max16.bmp" />
     <Image Include="..\Icons\Min16.bmp" />
     <Image Include="..\Icons\RightArrow16.bmp" />
+    <Image Include="..\Icons\settings.ico" />
     <Image Include="SimpleVeil.ico" />
     <Image Include="small.ico" />
   </ItemGroup>
