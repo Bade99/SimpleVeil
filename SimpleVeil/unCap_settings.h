@@ -19,10 +19,11 @@ namespace settings {
 				HWND text_update_check_frequency;
 				HWND combo_update_check_frequency;
 				HWND text_last_update_check;
+				HWND text_app_version;
 				HWND button_save;
 				HWND button_cancel;
 			};
-			HWND all[5];
+			HWND all[6];
 			void _() { static_assert(sizeof(*this) == sizeof(this->all), "Update 'all[x]' to the correct number of HWNDs"); }
 		}controls;
 		unCapClSettings* settings;
@@ -52,6 +53,7 @@ namespace settings {
 		auto combo_update_check_frequency = text_update_check_frequency.cut_right(medium_wnd_w);
 		page.cut_top(fixed_h_pad);
 		auto text_last_update_check = page.cut_top(small_wnd_h);
+		auto text_app_version = page.cut_top(small_wnd_h);
 		auto buttonbar = page.cut_bottom(small_wnd_h);
 		auto btn_yes = buttonbar.cut_right(small_wnd_w);
 		buttonbar.cut_right(fixed_w_pad);
@@ -61,6 +63,7 @@ namespace settings {
 		MoveWindow(controls.text_update_check_frequency, text_update_check_frequency);
 		MoveWindow(controls.combo_update_check_frequency, combo_update_check_frequency);
 		MoveWindow(controls.text_last_update_check, text_last_update_check);
+		MoveWindow(controls.text_app_version, text_app_version);
 		MoveWindow(controls.button_cancel, btn_no);
 		MoveWindow(controls.button_save, btn_yes);
 	}
@@ -98,6 +101,12 @@ namespace settings {
 		controls.text_last_update_check = CreateWindowExW(
 			WS_EX_COMPOSITED | WS_EX_TRANSPARENT,
 			L"Static", (str(L"Last checked: ") + time).c_str(),
+			WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_ENDELLIPSIS
+			, 0, 0, 0, 0, state->wnd, nullptr, nullptr, nullptr);
+
+		controls.text_app_version = CreateWindowExW(
+			WS_EX_COMPOSITED | WS_EX_TRANSPARENT,
+			L"Static", (str(L"App version: ") + appVersion).c_str(),
 			WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_ENDELLIPSIS
 			, 0, 0, 0, 0, state->wnd, nullptr, nullptr, nullptr);
 
@@ -219,7 +228,8 @@ namespace settings {
 			HWND static_wnd = (HWND)lparam;
 			HDC dc = (HDC)wparam;
 			SetBkColor(dc, ColorFromBrush(unCap_colors.ControlBk));
-			SetTextColor(dc, ColorFromBrush(static_wnd == state->controls.text_last_update_check ? unCap_colors.ControlTxt_Disabled : unCap_colors.ControlTxt));
+			bool is_info_wnd = static_wnd == state->controls.text_last_update_check || static_wnd == state->controls.text_app_version;
+			SetTextColor(dc, ColorFromBrush(is_info_wnd ? unCap_colors.ControlTxt_Disabled : unCap_colors.ControlTxt));
 			return (LRESULT)unCap_colors.ControlBk;
 		} break;
 		default:
