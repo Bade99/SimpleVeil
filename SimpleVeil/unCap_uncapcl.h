@@ -27,7 +27,7 @@ constexpr int brightness_slider_max = 90;
 
 #define APP_NAME "SimpleVeil"
 #ifndef _AUTOUPDATER_TEST
-	#define APP_VERSION "1.0.3"
+	#define APP_VERSION "1.0.4"
 #else
 	#define APP_VERSION "0.0.0"
 #endif
