@@ -163,6 +163,17 @@ mask_bilinear_sample sample_bilinear_mask(img* mask, i32 x, i32 y) {
 	return sample;
 }
 
+u8 sample_mask(img* mask, i32 x, i32 y) {
+	//NOTE: handmade 108 1:20:00 interesting, once you scale an img to half size or more you get sampling errors cause you're no longer sampling all the pixels involved, that's when you need MIPMAPPING
+	u8 idx = 7 - (x % 8);
+	x /= 8;
+	u8* texel_ptr = ((u8*)mask->mem + y * mask->pitch + x * 1);
+
+	//TODO(fran): remove duplicate pixel reads by applying the "&" afterwards
+	u8 tex = (*(u8*)texel_ptr) & (1 << idx); //NOTE: For a better blend we pick the colors around the texel, movement is much smoother
+	return tex;
+}
+
 void GetRoundRectPath(Gdiplus::GraphicsPath* path, RECT r, float diameter) {
 	float w = RECTWIDTH(r), h = RECTHEIGHT(r);
 	if (diameter > w) diameter = w;
@@ -389,11 +400,33 @@ namespace urender {
 		BOOL maskres = MaskBlt(dest, xDest, yDest, wDest, hDest, dest, 0, 0, bmp1, 0, 0, MAKEROP4(0x00AA0029, PATCOPY));
 #else
 		HBITMAP scaled_mask = (wDest != wSrc || hDest != hSrc) ? scale_mask(mask, wDest, hDest) : mask; //NOTE: beware of applying any modification to scaled_mask, you could be modifying the original mask
+#if 0 //IMPORTANT: MaskBlt is terrible, has a million errors with undocumented solutions, and fails on many strange cases, for example when rendering onto a dc that is offscreen; and has problems with menus too
 		HBRUSH oldbr = (HBRUSH)SelectObject(dest, colorbr); defer{ SelectObject(dest, (HGDIOBJ)oldbr); };
 		BOOL maskres = MaskBlt(dest, xDest, yDest, wDest, hDest, dest, 0, 0, scaled_mask, 0, 0, MAKEROP4(0x00AA0029, PATCOPY));
-		if (scaled_mask != mask)DeleteObject(scaled_mask);
-#endif
 		Assert(maskres);
+#else
+
+		BITMAP masknfo; GetObject(scaled_mask, sizeof(masknfo), &masknfo); Assert(masknfo.bmBitsPixel == 1);
+		img mask_img;
+		mask_img.width = masknfo.bmWidth;
+		mask_img.height = masknfo.bmHeight;
+		mask_img.bits_per_pixel = 1;
+		mask_img.pitch = masknfo.bmWidthBytes;
+		int mask_sz = mask_img.height * mask_img.pitch;
+		mask_img.mem = malloc(mask_sz); defer{ free(mask_img.mem); };
+		int getbits = GetBitmapBits(scaled_mask, mask_sz, mask_img.mem); Assert(getbits == mask_sz);
+
+		for (int y = yDest; y < yDest + hDest; y++) {
+			for (int x = xDest; x < xDest + wDest; x++)
+			{
+				u8 sample = sample_mask(&mask_img, x - xDest, y - yDest);
+				if (!sample) SetPixel(dest, x, y, ColorFromBrush(colorbr));
+			}
+		}
+#endif
+
+		if (scaled_mask != mask) DeleteObject(scaled_mask);
+#endif
 	}
 
 	void draw_icon(HDC dest, int xDest, int yDest, int wDest, int hDest, HICON icon, int xSrc, int ySrc, int wSrc, int hSrc) {
