@@ -208,6 +208,30 @@ struct github_release {
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(github_release, tag_name, draft, prerelease, assets, body)
 
+struct version_number {
+    int major, minor, revision;
+    bool is_valid;
+
+    version_number(const std::string_view& versionStr)
+    {
+        is_valid = sscanf_s(versionStr.data(), "%2d.%3d.%5d", &major, &minor, &revision) == 3;
+    }
+
+    bool operator<(const version_number& otherVersion)
+    {
+        if (major < otherVersion.major) return true;
+        if (minor < otherVersion.minor) return true;
+        return revision < otherVersion.revision;
+    }
+};
+template <> struct fmt::formatter<version_number> {
+    constexpr auto parse(fmt::format_parse_context& ctx) { return ctx.begin(); }
+    template <typename FormatContext> auto format(const version_number& v, FormatContext& ctx) const {
+        return fmt::format_to(ctx.out(), "{}.{}.{}", v.major, v.minor, v.revision);
+    }
+};
+
+
 std::string cleanup_filename(std::string filename) {
     //TODO: we could use PathCleanupSpec() or some variant that allows for longer than MAX_PATH filepaths
     std::string res;
@@ -265,9 +289,11 @@ void InternetStatusCallback(HINTERNET hInternet, DWORD_PTR dwContext, DWORD dwIn
                 try {
                     auto release = json::parse(buffer).get<github_release>();
 
-                    auto old_version = std::string(APP_VERSION);
-                    auto new_version = get_to_first_number(release.tag_name);
-                    if (release.assets.size() >= 1 && release.assets[0].content_type == "application/x-msdownload" && !release.draft && !release.prerelease && new_version > old_version) { //TODO: better comparison function, the object is formed like so XXX.XXX.XXX, a simple > is not enough for cases like 1.14.0 > 1.2.0
+                    auto old_version = version_number(APP_VERSION);
+                    auto new_version = version_number(get_to_first_number(release.tag_name));
+                    if (release.assets.size() >= 1 && release.assets[0].content_type == "application/x-msdownload" 
+                        && !release.draft && !release.prerelease 
+                        && old_version.is_valid && new_version.is_valid && old_version < new_version ) {
                         auto& asset = release.assets[0];
                         auto title = convert_utf8_to_utf16(_f("Update from {} to {}", old_version, new_version));
                         auto description = _f("There's a new version of {} available!\nWould you like to update to {}?\n\n{}\n\nDownload size: {}", APP_NAME, new_version, release.body, formatBytesA(asset.size));
